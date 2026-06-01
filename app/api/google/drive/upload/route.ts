@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { Readable } from "node:stream";
 import { google } from "googleapis";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthorizedClient } from "@/lib/google/oauth";
+import { ensureRootFolder, ensureCategoryFolder } from "@/lib/google/driveFolders";
 
 export const runtime = "nodejs"; // googleapis needs Node, not the Edge runtime.
 
@@ -32,18 +34,43 @@ export async function POST(req: NextRequest) {
   if (!file) return NextResponse.json({ error: "Missing file" }, { status: 400 });
   const takenOn = (form.get("takenOn") as string) || new Date().toISOString().slice(0, 10);
   const caption = (form.get("caption") as string) || null;
+  const categoryId = (form.get("categoryId") as string) || null;
 
-  const auth = await getAuthorizedClient(user.id);
+  let auth;
+  try {
+    auth = await getAuthorizedClient(user.id);
+  } catch {
+    return NextResponse.json({ error: "Google Drive가 연동되지 않았습니다" }, { status: 409 });
+  }
   const drive = google.drive({ version: "v3", auth });
+
+  // Drive 폴더 미러링: 모든 사진을 "Our_Home" 폴더 아래로, 카테고리가 있으면
+  // 같은 이름의 하위 폴더로(없으면 생성, 있으면 재사용). 폴더 작업이 실패해도
+  // 업로드 자체는 막지 않도록 best-effort 처리.
+  let parents: string[] | undefined = process.env.GOOGLE_DRIVE_FOLDER_ID
+    ? [process.env.GOOGLE_DRIVE_FOLDER_ID]
+    : undefined;
+  try {
+    const rootId = await ensureRootFolder(drive, user.id);
+    parents = [rootId];
+    if (categoryId) {
+      const admin = createAdminClient();
+      const { data: cat } = await admin
+        .from("photo_categories")
+        .select("name")
+        .eq("id", categoryId)
+        .single();
+      if (cat?.name) parents = [await ensureCategoryFolder(drive, rootId, cat.name)];
+    }
+  } catch (e) {
+    console.error("Drive 폴더 준비 실패(루트 업로드로 진행):", e);
+  }
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const created = await drive.files.create({
     requestBody: {
       name: file.name || `our-home-${Date.now()}`,
-      // Optionally pin to a dedicated app folder via parents: [process.env.GOOGLE_DRIVE_FOLDER_ID]
-      ...(process.env.GOOGLE_DRIVE_FOLDER_ID
-        ? { parents: [process.env.GOOGLE_DRIVE_FOLDER_ID] }
-        : {}),
+      ...(parents ? { parents } : {}),
     },
     media: { mimeType: file.type || "image/jpeg", body: Readable.from(buffer) },
     fields: "id, webViewLink, thumbnailLink",
@@ -66,6 +93,7 @@ export async function POST(req: NextRequest) {
       thumbnail_link: created.data.thumbnailLink ?? null,
       taken_on: takenOn,
       caption,
+      category_id: categoryId,
     })
     .select()
     .single();

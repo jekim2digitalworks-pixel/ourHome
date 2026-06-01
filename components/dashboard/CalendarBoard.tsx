@@ -7,6 +7,8 @@ import {
   ChevronDown,
   Plus,
   Trash2,
+  Pencil,
+  X,
   Link2,
   CalendarDays,
   Loader2,
@@ -98,8 +100,14 @@ export function CalendarBoard() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerYear, setPickerYear] = useState(today.getFullYear());
 
-  const [title, setTitle] = useState("");
-  const [time, setTime] = useState("");
+  // 일정 추가/편집 폼. editingId=null 이면 새 일정, 값이 있으면 그 일정 수정.
+  const [form, setForm] = useState<{
+    editingId: string | null;
+    title: string;
+    allDay: boolean;
+    startTime: string;
+    endTime: string;
+  }>({ editingId: null, title: "", allDay: false, startTime: "", endTime: "" });
 
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -130,6 +138,11 @@ export function CalendarBoard() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // 다른 날짜를 선택하면 편집 폼 초기화(새 일정 추가 모드로).
+  useEffect(() => {
+    setForm({ editingId: null, title: "", allDay: false, startTime: "", endTime: "" });
+  }, [selected]);
 
   const byDay = useMemo(() => {
     const map: Record<string, CalEvent[]> = {};
@@ -191,30 +204,73 @@ export function CalendarBoard() {
     setPickerOpen(false);
   }
 
-  async function addEvent() {
-    if (!title.trim()) return;
+  function resetForm() {
+    setForm({ editingId: null, title: "", allDay: false, startTime: "", endTime: "" });
+  }
+
+  // 기존 일정을 클릭하면 폼에 채워 편집 모드로 전환.
+  function startEdit(ev: CalEvent) {
+    const toHHMM = (iso: string | null) => {
+      if (!iso) return "";
+      const d = new Date(iso);
+      return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    };
+    setForm({
+      editingId: ev.id,
+      title: ev.title,
+      allDay: ev.allDay,
+      startTime: ev.allDay ? "" : toHHMM(ev.startsAt),
+      endTime: ev.allDay ? "" : toHHMM(ev.endsAt),
+    });
+  }
+
+  // selected("YYYY-MM-DD") + "HH:MM" → 로컬 시각 ISO
+  function combine(time: string) {
+    const [y, mo, d] = selected.split("-").map(Number);
+    const [hh, mm] = time.split(":").map(Number);
+    return new Date(y, mo - 1, d, hh, mm).toISOString();
+  }
+
+  async function submitForm() {
+    if (!form.title.trim()) return;
     setBusy(true);
-    const allDay = !time;
+    const allDay = form.allDay || !form.startTime;
     let startsAt: string;
     let endsAt: string;
     if (allDay) {
       startsAt = selected;
       endsAt = selected;
     } else {
-      const [hh, mm] = time.split(":").map(Number);
-      const [y, mo, d] = selected.split("-").map(Number);
-      const s = new Date(y, mo - 1, d, hh, mm);
-      startsAt = s.toISOString();
-      endsAt = new Date(s.getTime() + 60 * 60 * 1000).toISOString();
+      startsAt = combine(form.startTime);
+      endsAt = form.endTime
+        ? combine(form.endTime)
+        : new Date(new Date(startsAt).getTime() + 60 * 60 * 1000).toISOString();
+      // 종료가 시작보다 빠르면 1시간으로 보정
+      if (new Date(endsAt) <= new Date(startsAt)) {
+        endsAt = new Date(new Date(startsAt).getTime() + 60 * 60 * 1000).toISOString();
+      }
     }
     try {
-      await fetch("/api/google/calendar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), startsAt, endsAt, allDay }),
-      });
-      setTitle("");
-      setTime("");
+      if (form.editingId) {
+        await fetch("/api/google/calendar", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            googleEventId: form.editingId,
+            title: form.title.trim(),
+            startsAt,
+            endsAt,
+            allDay,
+          }),
+        });
+      } else {
+        await fetch("/api/google/calendar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: form.title.trim(), startsAt, endsAt, allDay }),
+        });
+      }
+      resetForm();
       await load();
     } finally {
       setBusy(false);
@@ -225,6 +281,7 @@ export function CalendarBoard() {
     setBusy(true);
     try {
       await fetch(`/api/google/calendar?googleEventId=${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (form.editingId === id) resetForm();
       await load();
     } finally {
       setBusy(false);
@@ -473,55 +530,132 @@ export function CalendarBoard() {
                 일정이 없습니다.
               </li>
             )}
-            {selectedEvents.map((ev) => (
-              <li
-                key={ev.id}
-                className="group flex items-center gap-2 rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2"
-              >
-                <span className="h-7 w-1 rounded-full bg-accent-cool" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-zinc-100">{ev.title}</p>
-                  <p className="text-[11px] text-zinc-500">{fmtTime(ev.startsAt, ev.allDay)}</p>
-                </div>
-                <button
-                  onClick={() => removeEvent(ev.id)}
-                  disabled={busy}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-zinc-500 opacity-0 transition-all duration-300 ease-out-back hover:bg-rose-400/10 hover:text-rose-300 group-hover:opacity-100 disabled:opacity-30"
-                  aria-label="삭제"
+            {selectedEvents.map((ev) => {
+              const editing = form.editingId === ev.id;
+              return (
+                <li
+                  key={ev.id}
+                  className={[
+                    "group flex items-center gap-2 rounded-xl border px-3 py-2 transition-colors",
+                    editing
+                      ? "border-accent/40 bg-accent/10"
+                      : "border-white/5 bg-white/[0.03] hover:bg-white/[0.06]",
+                  ].join(" ")}
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </li>
-            ))}
+                  {/* 본문 클릭 → 편집 모드 */}
+                  <button
+                    onClick={() => startEdit(ev)}
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    title="클릭하여 수정"
+                  >
+                    <span className="h-7 w-1 shrink-0 rounded-full bg-accent-cool" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm text-zinc-100">{ev.title}</span>
+                      <span className="block text-[11px] text-zinc-500">{fmtTime(ev.startsAt, ev.allDay)}</span>
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => startEdit(ev)}
+                    disabled={busy}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-zinc-500 opacity-0 transition-all duration-300 ease-out-back hover:bg-white/10 hover:text-zinc-200 group-hover:opacity-100 disabled:opacity-30"
+                    aria-label="수정"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => removeEvent(ev.id)}
+                    disabled={busy}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-zinc-500 opacity-0 transition-all duration-300 ease-out-back hover:bg-rose-400/10 hover:text-rose-300 group-hover:opacity-100 disabled:opacity-30"
+                    aria-label="삭제"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              );
+            })}
           </ul>
 
-          <div className="space-y-2 rounded-2xl border border-white/5 bg-white/[0.02] p-3">
-            <p className="text-[11px] font-medium text-zinc-400">이 날에 일정 추가</p>
+          <div className="space-y-2.5 rounded-2xl border border-white/5 bg-white/[0.02] p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-medium text-zinc-400">
+                {form.editingId ? "일정 수정" : "이 날에 일정 추가"}
+              </p>
+              {form.editingId && (
+                <button
+                  onClick={resetForm}
+                  className="flex items-center gap-0.5 text-[11px] text-zinc-500 hover:text-zinc-300"
+                >
+                  <X className="h-3 w-3" /> 취소
+                </button>
+              )}
+            </div>
+
             <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addEvent()}
+              value={form.title}
+              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+              onKeyDown={(e) => e.key === "Enter" && submitForm()}
               placeholder="일정 제목"
               className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-accent/40 focus:outline-none"
             />
-            <div className="flex items-center gap-2">
-              <input
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="flex-1 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-zinc-100 focus:border-accent/40 focus:outline-none [color-scheme:dark]"
-              />
+
+            {/* 종일 토글 */}
+            <label className="flex cursor-pointer items-center justify-between rounded-lg px-1 py-0.5">
+              <span className="text-xs text-zinc-400">종일</span>
               <button
-                onClick={addEvent}
-                disabled={busy || !title.trim()}
-                className="flex items-center gap-1 rounded-lg bg-accent/90 px-3 py-2 text-sm font-medium text-ink-900 transition-all duration-300 ease-out-back hover:scale-102 hover:bg-accent disabled:opacity-40"
+                type="button"
+                role="switch"
+                aria-checked={form.allDay}
+                onClick={() => setForm((f) => ({ ...f, allDay: !f.allDay }))}
+                className={[
+                  "relative h-5 w-9 rounded-full transition-all duration-300 ease-out-back",
+                  form.allDay ? "bg-accent/80" : "bg-white/10",
+                ].join(" ")}
               >
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" strokeWidth={2.5} />}
-                추가
+                <span
+                  className={[
+                    "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all duration-300 ease-out-back",
+                    form.allDay ? "left-[18px]" : "left-0.5",
+                  ].join(" ")}
+                />
               </button>
-            </div>
+            </label>
+
+            {/* 시간 범위 (종일이면 숨김) */}
+            {!form.allDay && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="time"
+                  value={form.startTime}
+                  onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))}
+                  className="flex-1 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-2 text-sm text-zinc-100 focus:border-accent/40 focus:outline-none [color-scheme:dark]"
+                />
+                <span className="text-xs text-zinc-600">~</span>
+                <input
+                  type="time"
+                  value={form.endTime}
+                  onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))}
+                  className="flex-1 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-2 text-sm text-zinc-100 focus:border-accent/40 focus:outline-none [color-scheme:dark]"
+                />
+              </div>
+            )}
+
+            <button
+              onClick={submitForm}
+              disabled={busy || !form.title.trim()}
+              className="flex w-full items-center justify-center gap-1 rounded-lg bg-accent/90 px-3 py-2 text-sm font-medium text-ink-900 transition-all duration-300 ease-out-back hover:scale-102 hover:bg-accent disabled:opacity-40"
+            >
+              {busy ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : form.editingId ? (
+                <Pencil className="h-4 w-4" strokeWidth={2.5} />
+              ) : (
+                <Plus className="h-4 w-4" strokeWidth={2.5} />
+              )}
+              {form.editingId ? "수정 저장" : "추가"}
+            </button>
+
             <p className="text-[10px] text-zinc-600">
-              시간을 비우면 종일 일정. 추가·삭제는 실제 Google 캘린더에 반영됩니다.
+              종일을 끄고 시작 시간만 지정하면 1시간 일정. 추가·수정·삭제 모두 실제 Google 캘린더에 반영됩니다.
             </p>
           </div>
         </div>

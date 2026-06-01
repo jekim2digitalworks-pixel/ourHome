@@ -16,7 +16,7 @@ export type Json =
   | Json[];
 
 export type TxType = "income" | "expense";
-export type BabyCategory = "feeding" | "diaper" | "sleep" | "bath" | "memo";
+export type BabyCategory = "feeding" | "food" | "pee" | "poop" | "sleep" | "bath" | "memo";
 
 export interface Database {
   public: {
@@ -142,6 +142,7 @@ export interface Database {
           thumbnail_link: string | null;
           taken_on: string;
           caption: string | null;
+          category_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -152,8 +153,21 @@ export interface Database {
           thumbnail_link?: string | null;
           taken_on: string;
           caption?: string | null;
+          category_id?: string | null;
         };
-        Update: Partial<{ caption: string | null; taken_on: string }>;
+        Update: Partial<{ caption: string | null; taken_on: string; category_id: string | null }>;
+        Relationships: [];
+      };
+      photo_categories: {
+        Row: {
+          id: string;
+          family_id: string;
+          name: string;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: { family_id: string; name: string; sort_order?: number };
+        Update: Partial<{ name: string; sort_order: number }>;
         Relationships: [];
       };
       google_tokens: {
@@ -163,10 +177,11 @@ export interface Database {
           access_token: string | null;
           scope: string | null;
           expiry_date: number | null;
+          drive_root_folder_id: string | null;
           updated_at: string;
         };
         Insert: { user_id: string; refresh_token: string; access_token?: string | null; scope?: string | null; expiry_date?: number | null };
-        Update: Partial<{ refresh_token: string; access_token: string | null; scope: string | null; expiry_date: number | null }>;
+        Update: Partial<{ refresh_token: string; access_token: string | null; scope: string | null; expiry_date: number | null; drive_root_folder_id: string | null }>;
         Relationships: [];
       };
     };

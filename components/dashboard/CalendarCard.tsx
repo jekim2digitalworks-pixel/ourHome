@@ -135,7 +135,8 @@ export function CalendarCard() {
 
       {state === "connected" && events.length > 0 && (
         <ul className="flex-1 space-y-2.5">
-          {events.map((e) => (
+          {/* 가까운 순 최대 5개만 노출(개요가 길어지지 않도록) */}
+          {events.slice(0, 5).map((e) => (
             <li
               key={e.id}
               className="group flex items-center gap-3 rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2.5 transition-all duration-300 ease-out-back hover:translate-x-0.5 hover:bg-white/[0.06]"
@@ -148,6 +149,11 @@ export function CalendarCard() {
               <ChevronRight className="h-4 w-4 text-zinc-600 transition-transform group-hover:translate-x-0.5 group-hover:text-zinc-400" />
             </li>
           ))}
+          {events.length > 5 && (
+            <li className="pt-0.5 text-center text-[11px] text-zinc-500">
+              외 {events.length - 5}건 · 캘린더 탭에서 모두 보기
+            </li>
+          )}
         </ul>
       )}
     </GlassCard>

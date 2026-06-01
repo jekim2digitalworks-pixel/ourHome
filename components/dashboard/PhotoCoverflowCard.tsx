@@ -1,80 +1,124 @@
 "use client";
 
-import { Images, Upload } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Images, Loader2 } from "lucide-react";
 import { Swiper, SwiperSlide } from "swiper/react";
-import { EffectCoverflow, Navigation } from "swiper/modules";
+import { EffectCoverflow } from "swiper/modules";
 import "swiper/css";
 import "swiper/css/effect-coverflow";
+import { createClient } from "@/lib/supabase/client";
 import { GlassCard, CardHeader } from "@/components/ui/GlassCard";
 
 interface Photo {
   id: string;
-  web_view_link: string;
-  thumbnail_link: string | null;
+  drive_file_id: string;
   caption: string | null;
+  taken_on: string;
 }
 
-// Gradient placeholders so the coverflow renders before Drive is connected.
-const SAMPLE: Photo[] = [
-  { id: "1", web_view_link: "#", thumbnail_link: null, caption: "첫 외출" },
-  { id: "2", web_view_link: "#", thumbnail_link: null, caption: "백일 사진" },
-  { id: "3", web_view_link: "#", thumbnail_link: null, caption: "첫 이유식" },
-  { id: "4", web_view_link: "#", thumbnail_link: null, caption: "공원에서" },
-  { id: "5", web_view_link: "#", thumbnail_link: null, caption: "낮잠" },
-];
+function thumb(id: string) {
+  return `https://drive.google.com/thumbnail?id=${id}&sz=w600`;
+}
 
-const GRADIENTS = [
-  "from-accent/30 to-accent-cool/20",
-  "from-indigo-400/25 to-accent/20",
-  "from-sky-400/25 to-accent-soft/20",
-  "from-rose-300/20 to-accent-cool/25",
-  "from-emerald-300/20 to-accent/20",
-];
+export function PhotoCoverflowCard({ familyId }: { familyId?: string }) {
+  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [loading, setLoading] = useState(true);
 
-export function PhotoCoverflowCard({ photos = SAMPLE }: { photos?: Photo[] }) {
+  useEffect(() => {
+    if (!familyId) {
+      setLoading(false);
+      return;
+    }
+    const supabase = createClient();
+    let on = true;
+    (async () => {
+      const { data } = await supabase
+        .from("photos")
+        .select("id, drive_file_id, caption, taken_on")
+        .eq("family_id", familyId)
+        .order("taken_on", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(12);
+      if (on) {
+        setPhotos((data as Photo[]) ?? []);
+        setLoading(false);
+      }
+    })();
+    // 실시간: 사진 추가/삭제 반영
+    const ch = supabase
+      .channel(`photos-card:${familyId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "photos", filter: `family_id=eq.${familyId}` },
+        async () => {
+          const { data } = await supabase
+            .from("photos")
+            .select("id, drive_file_id, caption, taken_on")
+            .eq("family_id", familyId)
+            .order("taken_on", { ascending: false })
+            .limit(12);
+          setPhotos((data as Photo[]) ?? []);
+        }
+      )
+      .subscribe();
+    return () => {
+      on = false;
+      supabase.removeChannel(ch);
+    };
+  }, [familyId]);
+
   return (
     <GlassCard className="flex h-full flex-col">
       <CardHeader
         icon={<Images className="h-4.5 w-4.5" />}
         title="사진첩"
-        hint="Google Drive 저장 · 링크만 보관"
-        action={
-          <label className="flex cursor-pointer items-center gap-1 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-zinc-300 transition-all duration-300 ease-out-back hover:scale-102 hover:bg-white/[0.08]">
-            <Upload className="h-3 w-3" /> 업로드
-            <input type="file" accept="image/*" className="hidden" />
-          </label>
-        }
+        hint={familyId ? `최근 ${photos.length}장` : "Google Drive 연동"}
       />
 
-      <div className="flex-1">
-        <Swiper
-          modules={[EffectCoverflow, Navigation]}
-          effect="coverflow"
-          grabCursor
-          centeredSlides
-          slidesPerView={1.8}
-          loop
-          coverflowEffect={{ rotate: 28, stretch: 0, depth: 120, modifier: 1, slideShadows: false }}
-          className="h-44 w-full"
-        >
-          {photos.map((p, i) => (
-            <SwiperSlide key={p.id} className="!w-40">
-              <figure className="relative h-40 w-40 overflow-hidden rounded-2xl border border-white/10 shadow-bezel">
-                {p.thumbnail_link ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.thumbnail_link} alt={p.caption ?? ""} className="h-full w-full object-cover" />
-                ) : (
-                  <div className={`h-full w-full bg-gradient-to-br ${GRADIENTS[i % GRADIENTS.length]}`} />
-                )}
-                {p.caption && (
+      <div className="flex flex-1 items-center">
+        {!familyId ? (
+          <div className="w-full text-center text-sm text-zinc-500">가족을 만들면 사진첩이 활성화됩니다.</div>
+        ) : loading ? (
+          <div className="flex w-full items-center justify-center text-sm text-zinc-600">
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 불러오는 중…
+          </div>
+        ) : photos.length === 0 ? (
+          <div className="w-full text-center text-sm text-zinc-500">
+            아직 사진이 없어요.
+            <br />
+            <span className="text-[11px] text-zinc-600">사진 탭에서 업로드해보세요.</span>
+          </div>
+        ) : (
+          <Swiper
+            modules={[EffectCoverflow]}
+            effect="coverflow"
+            grabCursor
+            centeredSlides
+            slidesPerView={1.8}
+            loop={photos.length > 3}
+            coverflowEffect={{ rotate: 28, stretch: 0, depth: 120, modifier: 1, slideShadows: false }}
+            className="h-44 w-full"
+          >
+            {photos.map((p) => (
+              <SwiperSlide key={p.id} className="!w-40">
+                <figure className="relative h-40 w-40 overflow-hidden rounded-2xl border border-white/10 shadow-bezel">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={thumb(p.drive_file_id)}
+                    alt={p.caption ?? ""}
+                    loading="lazy"
+                    draggable={false}
+                    referrerPolicy="no-referrer"
+                    className="h-full w-full bg-ink-700 object-cover"
+                  />
                   <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink-900/80 to-transparent px-3 py-2 text-xs text-zinc-100">
-                    {p.caption}
+                    {p.caption || p.taken_on.slice(5).replace("-", "/")}
                   </figcaption>
-                )}
-              </figure>
-            </SwiperSlide>
-          ))}
-        </Swiper>
+                </figure>
+              </SwiperSlide>
+            ))}
+          </Swiper>
+        )}
       </div>
     </GlassCard>
   );

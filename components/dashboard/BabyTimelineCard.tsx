@@ -1,22 +1,25 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Baby, Milk, Moon, Droplets, Bath, StickyNote } from "lucide-react";
+import { Baby, Milk, Moon, Droplets, Droplet, Bath, StickyNote, Soup } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { GlassCard, CardHeader } from "@/components/ui/GlassCard";
 
-type BabyCategory = "feeding" | "diaper" | "sleep" | "bath" | "memo";
+type BabyCategory = "feeding" | "food" | "pee" | "poop" | "sleep" | "bath" | "memo";
 
 interface BabyRecord {
   id: string;
   category: BabyCategory;
   note: string | null;
   recorded_at: string;
+  author_id?: string;
 }
 
 const CATEGORY_META: Record<BabyCategory, { label: string; icon: typeof Baby; tint: string }> = {
   feeding: { label: "수유", icon: Milk, tint: "text-accent-soft" },
-  diaper: { label: "배변", icon: Droplets, tint: "text-accent-cool" },
+  food: { label: "이유식", icon: Soup, tint: "text-amber-300" },
+  pee: { label: "소변", icon: Droplet, tint: "text-yellow-300" },
+  poop: { label: "대변", icon: Droplets, tint: "text-amber-500" },
   sleep: { label: "수면", icon: Moon, tint: "text-indigo-300" },
   bath: { label: "목욕", icon: Bath, tint: "text-sky-300" },
   memo: { label: "메모", icon: StickyNote, tint: "text-zinc-300" },
@@ -26,7 +29,7 @@ const CATEGORY_META: Record<BabyCategory, { label: string; icon: typeof Baby; ti
 const SAMPLE: BabyRecord[] = [
   { id: "s1", category: "feeding", note: "분유 120ml", recorded_at: new Date(Date.now() - 25 * 60000).toISOString() },
   { id: "s2", category: "sleep", note: "낮잠 시작", recorded_at: new Date(Date.now() - 95 * 60000).toISOString() },
-  { id: "s3", category: "diaper", note: "기저귀 교체", recorded_at: new Date(Date.now() - 160 * 60000).toISOString() },
+  { id: "s3", category: "poop", note: "기저귀 교체", recorded_at: new Date(Date.now() - 160 * 60000).toISOString() },
 ];
 
 function timeAgo(iso: string) {
@@ -36,7 +39,15 @@ function timeAgo(iso: string) {
   return `${Math.round(mins / 60)}시간 전`;
 }
 
-export function BabyTimelineCard({ familyId }: { familyId?: string }) {
+export function BabyTimelineCard({
+  familyId,
+  currentUserId,
+  members = {},
+}: {
+  familyId?: string;
+  currentUserId?: string;
+  members?: Record<string, { name: string; avatar: string | null }>;
+}) {
   const [records, setRecords] = useState<BabyRecord[]>(SAMPLE);
   const [live, setLive] = useState(false);
 
@@ -48,7 +59,7 @@ export function BabyTimelineCard({ familyId }: { familyId?: string }) {
     (async () => {
       const { data } = await supabase
         .from("baby_records")
-        .select("id, category, note, recorded_at")
+        .select("id, category, note, recorded_at, author_id")
         .eq("family_id", familyId)
         .order("recorded_at", { ascending: false })
         .limit(20);
@@ -96,7 +107,7 @@ export function BabyTimelineCard({ familyId }: { familyId?: string }) {
       />
 
       <ol className="relative ml-2 flex-1 space-y-4 border-l border-white/10 pl-5">
-        {records.map((r) => {
+        {records.slice(0, 5).map((r) => {
           const meta = CATEGORY_META[r.category];
           const Icon = meta.icon;
           return (
@@ -105,10 +116,37 @@ export function BabyTimelineCard({ familyId }: { familyId?: string }) {
                 <Icon className={`h-3 w-3 ${meta.tint}`} />
               </span>
               <div className="flex items-baseline justify-between gap-3">
-                <p className="text-sm text-zinc-200">
-                  <span className="font-medium">{meta.label}</span>
-                  {r.note && <span className="text-zinc-400"> · {r.note}</span>}
-                </p>
+                <div className="min-w-0">
+                  <p className="text-sm text-zinc-200">
+                    <span className="font-medium">{meta.label}</span>
+                    {r.note && <span className="text-zinc-400"> · {r.note}</span>}
+                  </p>
+                  {r.author_id && members[r.author_id] && (
+                    <span className="mt-1 flex items-center gap-1">
+                      <span className="h-4 w-4 overflow-hidden rounded-full border border-white/10 bg-accent/15">
+                        {members[r.author_id].avatar ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={members[r.author_id].avatar!}
+                            alt=""
+                            referrerPolicy="no-referrer"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <span className="flex h-full w-full items-center justify-center text-[8px] font-semibold text-accent">
+                            {members[r.author_id].name.charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                      </span>
+                      <span
+                        className={`text-[11px] ${r.author_id === currentUserId ? "text-accent" : "text-zinc-500"}`}
+                      >
+                        {members[r.author_id].name}
+                        {r.author_id === currentUserId && " (나)"}
+                      </span>
+                    </span>
+                  )}
+                </div>
                 {/* 상대시간은 서버/클라 렌더 시각이 달라 hydration 경고가 나므로 억제 */}
                 <time suppressHydrationWarning className="shrink-0 text-[11px] text-zinc-500">
                   {timeAgo(r.recorded_at)}
