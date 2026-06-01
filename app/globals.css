@@ -1,0 +1,54 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-ink-900 text-zinc-200 antialiased;
+    /* Subtle warm radial glow so the dark base never reads as flat black. */
+    background-image:
+      radial-gradient(1200px 600px at 15% -10%, rgba(216, 180, 135, 0.08), transparent 60%),
+      radial-gradient(1000px 500px at 110% 10%, rgba(143, 179, 201, 0.06), transparent 55%);
+    background-attachment: fixed;
+  }
+
+  /* Korean readability: never break inside words, relaxed leading on prose. */
+  p,
+  .prose-ko {
+    word-break: keep-all;
+    @apply leading-relaxed;
+  }
+}
+
+@layer components {
+  /* Reusable glass surface — backdrop blur + faint white veil + double bezel. */
+  .glass {
+    @apply rounded-2xl border border-white/10 bg-white/[0.06] shadow-bezel backdrop-blur-md;
+  }
+
+  .glass-strong {
+    @apply rounded-3xl border border-white/10 bg-white/[0.08] shadow-bezel-lg backdrop-blur-xl;
+  }
+}
+
+/* Restrained custom scrollbar to match the high-density aesthetic. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.16);
+  background-clip: content-box;
+}
