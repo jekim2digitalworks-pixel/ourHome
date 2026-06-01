@@ -109,7 +109,10 @@ export function BabyTimelineCard({ familyId }: { familyId?: string }) {
                   <span className="font-medium">{meta.label}</span>
                   {r.note && <span className="text-zinc-400"> · {r.note}</span>}
                 </p>
-                <time className="shrink-0 text-[11px] text-zinc-500">{timeAgo(r.recorded_at)}</time>
+                {/* 상대시간은 서버/클라 렌더 시각이 달라 hydration 경고가 나므로 억제 */}
+                <time suppressHydrationWarning className="shrink-0 text-[11px] text-zinc-500">
+                  {timeAgo(r.recorded_at)}
+                </time>
               </div>
             </li>
           );

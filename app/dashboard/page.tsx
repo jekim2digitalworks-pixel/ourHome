@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Sidebar, MobileTabBar, type TabKey } from "@/components/dashboard/Sidebar";
 import { TopBar } from "@/components/dashboard/TopBar";
 import { CalendarCard } from "@/components/dashboard/CalendarCard";
+import { CalendarBoard } from "@/components/dashboard/CalendarBoard";
 import { AssetSummaryCard } from "@/components/dashboard/AssetSummaryCard";
 import { BabyTimelineCard } from "@/components/dashboard/BabyTimelineCard";
 import { PhotoCoverflowCard } from "@/components/dashboard/PhotoCoverflowCard";
@@ -65,8 +66,8 @@ export default function DashboardPage() {
         )}
 
         {active === "calendar" && (
-          <div className="max-w-2xl animate-fade-up">
-            <CalendarCard />
+          <div className="animate-fade-up">
+            <CalendarBoard />
           </div>
         )}
         {active === "assets" && (
