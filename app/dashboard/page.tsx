@@ -37,8 +37,26 @@ interface Profile {
 }
 
 export default function DashboardPage() {
-  const [active, setActive] = useState<TabKey>("overview");
+  const [active, setActiveState] = useState<TabKey>("overview");
   const [enabled, setEnabled] = useState<TabKey[]>(["calendar", "assets", "baby", "photos"]);
+
+  // 탭을 URL(?tab=)과 동기화해 브라우저 뒤로/앞으로가 탭 사이를 오가게 한다.
+  useEffect(() => {
+    const readTab = () => {
+      const t = new URLSearchParams(window.location.search).get("tab") as TabKey | null;
+      setActiveState(t && t in TITLES ? t : "overview");
+    };
+    readTab();
+    window.addEventListener("popstate", readTab);
+    return () => window.removeEventListener("popstate", readTab);
+  }, []);
+
+  const setActive = useCallback((key: TabKey) => {
+    setActiveState(key);
+    const url = key === "overview" ? window.location.pathname : `${window.location.pathname}?tab=${key}`;
+    if (key === (new URLSearchParams(window.location.search).get("tab") ?? "overview")) return;
+    window.history.pushState({ tab: key }, "", url);
+  }, []);
   const [primary, setPrimary] = useState<TabKey>("baby");
 
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -121,7 +139,20 @@ export default function DashboardPage() {
 
             <div className="grid auto-rows-fr grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {orderedCards.map((key, i) => (
-                <div key={key} className="h-full animate-fade-up" style={{ animationDelay: `${i * 60}ms` }}>
+                <div
+                  key={key}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setActive(key)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setActive(key);
+                    }
+                  }}
+                  className="h-full animate-fade-up cursor-pointer rounded-3xl transition-transform duration-300 ease-out-back hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  style={{ animationDelay: `${i * 60}ms` }}
+                >
                   {key === "calendar" && <CalendarCard />}
                   {key === "assets" && (
                     <AssetSummaryCard familyId={familyId ?? undefined} currentUserId={profile?.userId} />

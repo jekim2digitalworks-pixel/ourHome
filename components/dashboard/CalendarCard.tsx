@@ -83,7 +83,10 @@ export function CalendarCard() {
                 <Check className="h-3 w-3" /> 연동됨
               </span>
               <button
-                onClick={load}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  load();
+                }}
                 className="flex h-[26px] w-[26px] items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-zinc-400 transition-all duration-300 ease-out-back hover:scale-102 hover:bg-white/[0.08]"
                 aria-label="새로고침"
               >
@@ -92,7 +95,10 @@ export function CalendarCard() {
             </div>
           ) : state === "disconnected" ? (
             <button
-              onClick={connectGoogle}
+              onClick={(e) => {
+                e.stopPropagation();
+                connectGoogle();
+              }}
               className="flex items-center gap-1 rounded-lg border border-accent/30 bg-accent/15 px-2 py-1 text-[11px] text-accent transition-all duration-300 ease-out-back hover:scale-102 hover:bg-accent/25"
             >
               <Link2 className="h-3 w-3" /> 연동하기
@@ -118,7 +124,10 @@ export function CalendarCard() {
             실제 일정이 여기에 표시됩니다.
           </p>
           <button
-            onClick={connectGoogle}
+            onClick={(e) => {
+              e.stopPropagation();
+              connectGoogle();
+            }}
             className="rounded-xl bg-accent/90 px-4 py-2 text-sm font-medium text-ink-900 transition-all duration-300 ease-out-back hover:scale-102 hover:bg-accent"
           >
             Google 캘린더 연동

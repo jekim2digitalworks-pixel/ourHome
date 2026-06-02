@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Wallet, TrendingUp, TrendingDown, Plus, Loader2 } from "lucide-react";
+import { Wallet, TrendingUp, TrendingDown, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { GlassCard, CardHeader } from "@/components/ui/GlassCard";
-import { formatKRW, parseToMinor, sumMinor } from "@/lib/format";
+import { formatKRW, sumMinor } from "@/lib/format";
 
 type TxType = "income" | "expense";
 
@@ -17,18 +17,9 @@ interface Tx {
   author_id: string;
 }
 
-export function AssetSummaryCard({
-  familyId,
-  currentUserId,
-}: {
-  familyId?: string;
-  currentUserId?: string;
-}) {
+export function AssetSummaryCard({ familyId }: { familyId?: string; currentUserId?: string }) {
   const [txs, setTxs] = useState<Tx[]>([]);
   const [loading, setLoading] = useState(true);
-  const [type, setType] = useState<TxType>("expense");
-  const [amount, setAmount] = useState("");
-  const [busy, setBusy] = useState(false);
 
   const monthKey = new Date().toISOString().slice(0, 7);
 
@@ -78,24 +69,6 @@ export function AssetSummaryCard({
     return { income, expense, net: income - expense };
   }, [txs]);
 
-  async function add() {
-    const amount_minor = parseToMinor(amount);
-    if (!amount_minor || !familyId || !currentUserId) return;
-    setBusy(true);
-    const supabase = createClient();
-    await supabase.from("transactions").insert({
-      family_id: familyId,
-      author_id: currentUserId,
-      type,
-      amount_minor,
-      category: type === "expense" ? "기타" : "수입",
-      occurred_on: new Date().toISOString().slice(0, 10),
-    });
-    setAmount("");
-    setBusy(false);
-    load();
-  }
-
   return (
     <GlassCard className="flex h-full flex-col">
       <CardHeader icon={<Wallet className="h-4.5 w-4.5" />} title="자산 관리" hint="이번 달 요약" />
@@ -121,7 +94,7 @@ export function AssetSummaryCard({
               </div>
             ) : txs.length === 0 ? (
               <div className="flex flex-1 items-center justify-center text-sm text-zinc-500">
-                아래에서 첫 내역을 추가해보세요.
+                아직 이번 달 내역이 없습니다.
               </div>
             ) : (
               <ul className="flex-1 space-y-1.5">
@@ -139,40 +112,6 @@ export function AssetSummaryCard({
                 ))}
               </ul>
             )}
-          </div>
-
-          {/* 빠른 입력 */}
-          <div className="mt-4 flex items-center gap-2">
-            <div className="flex rounded-xl border border-white/10 bg-white/[0.04] p-0.5">
-              {(["expense", "income"] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setType(t)}
-                  className={[
-                    "rounded-lg px-2.5 py-1.5 text-xs transition-all duration-300 ease-out-back",
-                    type === t ? "bg-white/10 text-zinc-100 shadow-bezel" : "text-zinc-500",
-                  ].join(" ")}
-                >
-                  {t === "expense" ? "지출" : "수입"}
-                </button>
-              ))}
-            </div>
-            <input
-              inputMode="numeric"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && add()}
-              placeholder="금액"
-              className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-accent/40 focus:outline-none"
-            />
-            <button
-              onClick={add}
-              disabled={busy}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/90 text-ink-900 transition-all duration-300 ease-out-back hover:scale-102 hover:bg-accent disabled:opacity-50"
-              aria-label="추가"
-            >
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" strokeWidth={2.5} />}
-            </button>
           </div>
         </>
       )}

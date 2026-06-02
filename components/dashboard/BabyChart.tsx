@@ -58,6 +58,10 @@ function fmtDur(ms: number) {
   const mm = m % 60;
   return h > 0 ? `${h}시간 ${mm}분` : `${mm}분`;
 }
+function nowHM() {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
 
 export function BabyChart({
   familyId,
