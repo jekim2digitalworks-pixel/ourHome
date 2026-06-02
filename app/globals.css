@@ -5,8 +5,12 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+  :root,
+  html.dark {
     color-scheme: dark;
+  }
+  html.light {
+    color-scheme: light;
   }
 
   body {
@@ -50,5 +54,137 @@
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.16);
+  background-clip: content-box;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   라이트 모드 (su_prompt 기반: 웜화이트 / 소프트그레이 / 절제된 단일 액센트)
+
+   컴포넌트들이 다크 값을 직접 박아둔 구조라(`text-zinc-100`, `bg-white/[0.04]`,
+   `bg-ink-800` 등), `html.light` 스코프에서 실제 사용된 유틸리티를 전역 리매핑한다.
+   다크 모드는 이 블록 밖이라 영향받지 않는다.
+   ────────────────────────────────────────────────────────────────────────── */
+html.light {
+  /* 텍스트 램프(다크에선 밝은 회색 → 라이트에선 짙은 잉크) */
+  --t50: #111317;
+  --t100: #1b1c20;
+  --t200: #26282d;
+  --t300: #3b3e44;
+  --t400: #565961;
+  --t500: #73767e;
+  --t600: #9b9ea5;
+}
+
+/* 바탕: 웜 오프화이트 + 아주 옅은 웜/쿨 글로우 */
+html.light body {
+  background-color: #f6f4ef;
+  color: var(--t300);
+  background-image:
+    radial-gradient(1200px 600px at 15% -10%, rgba(216, 180, 135, 0.1), transparent 60%),
+    radial-gradient(1000px 500px at 110% 10%, rgba(143, 179, 201, 0.08), transparent 55%);
+}
+
+/* 텍스트 */
+html.light .text-zinc-50 { color: var(--t50); }
+html.light .text-zinc-100 { color: var(--t100); }
+html.light .text-zinc-200 { color: var(--t200); }
+html.light .text-zinc-300 { color: var(--t300); }
+html.light .text-zinc-400 { color: var(--t400); }
+html.light .text-zinc-500 { color: var(--t500); }
+html.light .text-zinc-600 { color: var(--t600); }
+html.light .placeholder\:text-zinc-600::placeholder { color: #b0b4ba; }
+
+/* 텍스트 hover/group-hover 변형 — 라이트에서 밝아져 사라지지 않도록 */
+html.light .hover\:text-zinc-100:hover { color: var(--t100); }
+html.light .hover\:text-zinc-200:hover { color: var(--t200); }
+html.light .hover\:text-zinc-300:hover { color: var(--t300); }
+html.light .group:hover .group-hover\:text-zinc-200 { color: var(--t200); }
+html.light .group:hover .group-hover\:text-zinc-300 { color: var(--t300); }
+html.light .group:hover .group-hover\:text-zinc-400 { color: var(--t400); }
+
+/* 절제된 액센트 — 라이트 바탕에서 읽히도록 살짝 깊은 샌드(아이콘/텍스트용) */
+html.light .text-accent { color: #a9742b; }
+
+/* 캘린더 카테고리·요일·공휴일·상태 등 컬러 텍스트 — 라이트에선 밝은 -200/-300
+   톤이 흰 배경에 묻히므로 같은 색상의 진한 톤으로 매핑(칩의 옅은 틴트 위에서 읽힘). */
+html.light .text-rose-200 { color: #be123c; }
+html.light .text-rose-300\/70 { color: rgba(190, 18, 60, 0.8); }
+html.light .text-rose-300\/80 { color: rgba(190, 18, 60, 0.85); }
+html.light .text-rose-300\/90 { color: rgba(190, 18, 60, 0.9); }
+html.light .text-amber-200 { color: #b45309; }
+html.light .text-emerald-200 { color: #047857; }
+html.light .text-emerald-300 { color: #047857; }
+html.light .text-sky-200 { color: #0369a1; }
+html.light .text-sky-300\/80 { color: rgba(3, 105, 161, 0.85); }
+html.light .text-sky-300\/90 { color: rgba(3, 105, 161, 0.9); }
+html.light .text-violet-200 { color: #6d28d9; }
+
+/* 표면(다크의 흰색 베일 → 라이트에선 옅은 잉크 틴트로 은은한 입체) */
+html.light .bg-white\/\[0\.015\] { background-color: rgba(0, 0, 0, 0.015); }
+html.light .bg-white\/\[0\.02\] { background-color: rgba(0, 0, 0, 0.02); }
+html.light .bg-white\/\[0\.03\] { background-color: rgba(0, 0, 0, 0.026); }
+html.light .bg-white\/\[0\.04\] { background-color: rgba(0, 0, 0, 0.034); }
+html.light .bg-white\/\[0\.05\] { background-color: rgba(0, 0, 0, 0.044); }
+html.light .bg-white\/\[0\.06\] { background-color: rgba(0, 0, 0, 0.05); }
+html.light .bg-white\/\[0\.08\] { background-color: rgba(0, 0, 0, 0.06); }
+html.light .bg-white\/\[0\.09\] { background-color: rgba(0, 0, 0, 0.065); }
+html.light .bg-white\/\[0\.1\] { background-color: rgba(0, 0, 0, 0.075); }
+html.light .bg-white\/5 { background-color: rgba(0, 0, 0, 0.04); }
+html.light .bg-white\/10 { background-color: rgba(0, 0, 0, 0.07); }
+
+/* 표면 hover — 라이트에선 더 짙어지며 피드백 */
+html.light .hover\:bg-white\/\[0\.08\]:hover { background-color: rgba(0, 0, 0, 0.06); }
+html.light .hover\:bg-white\/\[0\.09\]:hover { background-color: rgba(0, 0, 0, 0.07); }
+html.light .hover\:bg-white\/\[0\.1\]:hover { background-color: rgba(0, 0, 0, 0.085); }
+
+/* 경계선 */
+html.light .border-white\/5 { border-color: rgba(0, 0, 0, 0.06); }
+html.light .border-white\/10 { border-color: rgba(0, 0, 0, 0.1); }
+html.light .border-white\/15 { border-color: rgba(0, 0, 0, 0.12); }
+html.light .border-white\/20 { border-color: rgba(0, 0, 0, 0.16); }
+
+/* 솔리드 잉크 표면 */
+html.light .bg-ink-700 { background-color: #ece9e2; }
+html.light .bg-ink-800 { background-color: #ffffff; }
+html.light .bg-ink-900 { background-color: #f6f4ef; }
+html.light .ring-black\/40 { --tw-ring-color: rgba(0, 0, 0, 0.06); }
+
+/* 글래스 & 더블베젤 — 라이트용 화이트 표면 + 부드러운 중성 음영 */
+html.light .glass {
+  background-color: rgba(255, 255, 255, 0.72);
+  border-color: rgba(0, 0, 0, 0.06);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.6),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.04),
+    0 10px 30px -14px rgba(40, 40, 60, 0.18);
+}
+html.light .glass-strong {
+  background-color: rgba(255, 255, 255, 0.82);
+  border-color: rgba(0, 0, 0, 0.06);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.7),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.05),
+    0 24px 60px -22px rgba(40, 40, 60, 0.22);
+}
+html.light .shadow-bezel {
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.6),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.04),
+    0 10px 30px -14px rgba(40, 40, 60, 0.16);
+}
+html.light .shadow-bezel-lg {
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.7),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.05),
+    0 24px 60px -22px rgba(40, 40, 60, 0.2);
+}
+
+/* 스크롤바 */
+html.light ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+  background-clip: content-box;
+}
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
   background-clip: content-box;
 }

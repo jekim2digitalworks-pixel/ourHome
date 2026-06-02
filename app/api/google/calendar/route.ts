@@ -5,6 +5,14 @@ import { getAuthorizedClient } from "@/lib/google/oauth";
 
 export const runtime = "nodejs";
 
+/** YYYY-MM-DD 에 n일 더한 날짜 문자열(UTC 기준 — 날짜 전용이라 TZ 영향 없음). */
+function addDaysYMD(ymd: string, n: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + n);
+  return dt.toISOString().slice(0, 10);
+}
+
 /**
  * 구글 기본 캘린더(primary)와 양방향 동기화하는 라우트.
  *  GET    ?timeMin&timeMax   → 기간 내 일정 조회 (미연동이면 connected:false)
@@ -47,13 +55,26 @@ export async function GET(req: NextRequest) {
     orderBy: "startTime",
   });
 
-  const events = (data.items ?? []).map((e) => ({
-    id: e.id,
-    title: e.summary ?? "(제목 없음)",
-    startsAt: e.start?.dateTime ?? e.start?.date ?? null,
-    endsAt: e.end?.dateTime ?? e.end?.date ?? null,
-    allDay: !e.start?.dateTime,
-  }));
+  const events = (data.items ?? []).map((e) => {
+    const allDay = !e.start?.dateTime;
+    const startsAt = e.start?.dateTime ?? e.start?.date ?? null;
+    let endsAt = e.end?.dateTime ?? e.end?.date ?? null;
+    // 종일 이벤트의 Google end.date 는 배타적(exclusive) → 포함(inclusive) 마지막 날로 변환.
+    if (allDay && endsAt) {
+      endsAt = addDaysYMD(endsAt, -1);
+      if (startsAt && endsAt < startsAt.slice(0, 10)) endsAt = startsAt.slice(0, 10);
+    }
+    const priv = e.extendedProperties?.private ?? {};
+    return {
+      id: e.id,
+      title: e.summary ?? "(제목 없음)",
+      startsAt,
+      endsAt,
+      allDay,
+      category: priv.category ?? null,
+      categoryLabel: priv.categoryLabel ?? null,
+    };
+  });
 
   // 대한민국 공휴일 캘린더(공개)도 함께 조회. description이 "공휴일"이면 법정공휴일/
   // 대체공휴일(빨간날), 그 외("기념일")는 어버이날 등 쉬는 날이 아닌 기념일.
@@ -91,6 +112,8 @@ export async function POST(req: NextRequest) {
     startsAt: string;
     endsAt?: string;
     allDay?: boolean;
+    category?: string;
+    categoryLabel?: string;
   };
   if (!body.title || !body.startsAt) {
     return NextResponse.json({ error: "title과 startsAt은 필수입니다" }, { status: 400 });
@@ -104,17 +127,25 @@ export async function POST(req: NextRequest) {
   }
 
   const calendar = google.calendar({ version: "v3", auth });
-  // 종일 일정은 date, 시간 일정은 dateTime 사용.
+  // 종일 일정은 date(종료일은 배타적 → +1일), 시간 일정은 dateTime 사용.
   const start = body.allDay
     ? { date: body.startsAt.slice(0, 10) }
     : { dateTime: body.startsAt };
   const end = body.allDay
-    ? { date: (body.endsAt ?? body.startsAt).slice(0, 10) }
+    ? { date: addDaysYMD((body.endsAt ?? body.startsAt).slice(0, 10), 1) }
     : { dateTime: body.endsAt ?? body.startsAt };
+  const extendedProperties = body.category
+    ? {
+        private: {
+          category: body.category,
+          ...(body.categoryLabel ? { categoryLabel: body.categoryLabel } : {}),
+        },
+      }
+    : undefined;
 
   const inserted = await calendar.events.insert({
     calendarId: "primary",
-    requestBody: { summary: body.title, description: body.description, start, end },
+    requestBody: { summary: body.title, description: body.description, start, end, extendedProperties },
   });
 
   // 가족 그룹이 있을 때만 DB에 미러(파트너 화면 공유용). 없으면 구글에만 생성.
@@ -156,6 +187,8 @@ export async function PATCH(req: NextRequest) {
     startsAt?: string;
     endsAt?: string;
     allDay?: boolean;
+    category?: string;
+    categoryLabel?: string;
   };
   if (!body.googleEventId) {
     return NextResponse.json({ error: "googleEventId는 필수입니다" }, { status: 400 });
@@ -174,7 +207,18 @@ export async function PATCH(req: NextRequest) {
     requestBody.start = body.allDay ? { date: body.startsAt.slice(0, 10) } : { dateTime: body.startsAt };
   }
   if (body.endsAt) {
-    requestBody.end = body.allDay ? { date: body.endsAt.slice(0, 10) } : { dateTime: body.endsAt };
+    // 종일 종료일은 배타적 → +1일.
+    requestBody.end = body.allDay
+      ? { date: addDaysYMD(body.endsAt.slice(0, 10), 1) }
+      : { dateTime: body.endsAt };
+  }
+  if (body.category !== undefined) {
+    requestBody.extendedProperties = {
+      private: {
+        category: body.category,
+        ...(body.categoryLabel ? { categoryLabel: body.categoryLabel } : {}),
+      },
+    };
   }
 
   const calendar = google.calendar({ version: "v3", auth });

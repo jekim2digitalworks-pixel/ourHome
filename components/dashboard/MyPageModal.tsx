@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, Camera, Loader2, Check, User, KeyRound, LogOut, Home } from "lucide-react";
+import { X, Camera, Loader2, Check, User, KeyRound, LogOut, Home, Moon, Sun } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useTheme } from "@/lib/useTheme";
 
 export function MyPageModal({
   open,
@@ -41,6 +42,8 @@ export function MyPageModal({
   const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pwSaving, setPwSaving] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+
+  const { theme, setTheme } = useTheme();
 
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -218,6 +221,33 @@ export function MyPageModal({
             </div>
           </>
         )}
+
+        {/* 화면 테마 */}
+        <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-zinc-400">
+          {theme === "light" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />} 화면 테마
+        </label>
+        <div className="mb-5 flex gap-1 rounded-xl border border-white/10 bg-white/[0.04] p-1">
+          {([
+            { key: "dark", label: "다크", icon: Moon },
+            { key: "light", label: "라이트", icon: Sun },
+          ] as const).map(({ key, label, icon: Icon }) => {
+            const on = theme === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setTheme(key)}
+                className={[
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-300 ease-out-back",
+                  on ? "bg-accent/90 text-ink-900 shadow-bezel" : "text-zinc-400 hover:text-zinc-200",
+                ].join(" ")}
+                aria-pressed={on}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </button>
+            );
+          })}
+        </div>
 
         {/* 비밀번호 변경 */}
         <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-zinc-400">

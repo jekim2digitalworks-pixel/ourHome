@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -12,9 +12,39 @@ import {
   Link2,
   CalendarDays,
   Loader2,
+  Cake,
+  PartyPopper,
+  Trees,
+  Plane,
+  Tag,
+  type LucideIcon,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { GlassCard } from "@/components/ui/GlassCard";
+
+type CatKey = "birthday" | "event" | "outing" | "travel" | "etc" | "custom";
+
+interface Category {
+  key: CatKey;
+  label: string;
+  Icon: LucideIcon;
+  text: string; // 칩 텍스트색
+  bg: string; // 칩 배경
+  border: string; // 선택 테두리
+  soft: string; // 선택 배경
+  solid: string; // 점/바 색
+}
+
+// 절제된 저채도 톤으로 카테고리 구분. 직접입력은 보라.
+const CATEGORIES: Category[] = [
+  { key: "birthday", label: "생일", Icon: Cake, text: "text-rose-200", bg: "bg-rose-400/15", border: "border-rose-400/45", soft: "bg-rose-400/10", solid: "bg-rose-400" },
+  { key: "event", label: "행사", Icon: PartyPopper, text: "text-amber-200", bg: "bg-amber-400/15", border: "border-amber-400/45", soft: "bg-amber-400/10", solid: "bg-amber-400" },
+  { key: "outing", label: "나들이", Icon: Trees, text: "text-emerald-200", bg: "bg-emerald-400/15", border: "border-emerald-400/45", soft: "bg-emerald-400/10", solid: "bg-emerald-400" },
+  { key: "travel", label: "여행", Icon: Plane, text: "text-sky-200", bg: "bg-sky-400/15", border: "border-sky-400/45", soft: "bg-sky-400/10", solid: "bg-sky-400" },
+  { key: "etc", label: "기타", Icon: Tag, text: "text-zinc-300", bg: "bg-zinc-400/15", border: "border-zinc-400/45", soft: "bg-zinc-400/10", solid: "bg-zinc-400" },
+  { key: "custom", label: "직접입력", Icon: Pencil, text: "text-violet-200", bg: "bg-violet-400/15", border: "border-violet-400/45", soft: "bg-violet-400/10", solid: "bg-violet-400" },
+];
+const catOf = (k?: string | null): Category => CATEGORIES.find((c) => c.key === k) ?? CATEGORIES[4];
 
 interface CalEvent {
   id: string;
@@ -22,12 +52,14 @@ interface CalEvent {
   startsAt: string | null;
   endsAt: string | null;
   allDay: boolean;
+  category?: string | null;
+  categoryLabel?: string | null;
 }
 
 interface Holiday {
   date: string; // YYYY-MM-DD
   title: string;
-  isPublic: boolean; // true=법정공휴일/대체공휴일(빨간날), false=기념일
+  isPublic: boolean;
 }
 
 type ConnState = "loading" | "connected" | "disconnected";
@@ -40,24 +72,51 @@ function dayKey(d: Date) {
     d.getDate()
   ).padStart(2, "0")}`;
 }
-function eventDayKey(ev: CalEvent) {
-  if (!ev.startsAt) return "";
-  return dayKey(new Date(ev.startsAt));
+function addDaysYMD(ymd: string, n: number) {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + n);
+  return dayKey(dt);
 }
-function fmtTime(iso: string | null, allDay: boolean) {
+function mdLabel(ymd: string) {
+  return `${Number(ymd.slice(5, 7))}/${Number(ymd.slice(8, 10))}`;
+}
+function fmtTime(iso: string | null) {
   if (!iso) return "";
-  if (allDay) return "종일";
   return new Date(iso).toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit", hour12: true });
+}
+function toHHMM(iso: string | null) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/** 이벤트가 걸쳐 있는 [시작일, 마지막일] (둘 다 inclusive YYYY-MM-DD). */
+function getSpan(ev: CalEvent): { startKey: string; endKey: string } {
+  if (!ev.startsAt) return { startKey: "", endKey: "" };
+  if (ev.allDay) {
+    const startKey = ev.startsAt.slice(0, 10);
+    let endKey = ev.endsAt ? ev.endsAt.slice(0, 10) : startKey; // 서버가 inclusive 로 보정해 줌
+    if (endKey < startKey) endKey = startKey;
+    return { startKey, endKey };
+  }
+  const s = new Date(ev.startsAt);
+  const e = ev.endsAt ? new Date(ev.endsAt) : s;
+  return { startKey: dayKey(s), endKey: dayKey(e) };
+}
+
+/** 일정의 시각/기간 표시 문자열. */
+function fmtWhen(ev: CalEvent) {
+  const { startKey, endKey } = getSpan(ev);
+  const multi = startKey !== endKey;
+  if (ev.allDay) return multi ? `${mdLabel(startKey)} ~ ${mdLabel(endKey)} · 종일` : "종일";
+  const t = fmtTime(ev.startsAt);
+  if (multi) return `${mdLabel(startKey)} ${t} ~ ${mdLabel(endKey)} ${fmtTime(ev.endsAt)}`;
+  return ev.endsAt ? `${t} ~ ${fmtTime(ev.endsAt)}` : t;
 }
 
 /** 연동 on/off 토글 스위치. */
-function ConnectionToggle({
-  state,
-  onToggle,
-}: {
-  state: ConnState;
-  onToggle: (next: boolean) => void;
-}) {
+function ConnectionToggle({ state, onToggle }: { state: ConnState; onToggle: (next: boolean) => void }) {
   const on = state === "connected";
   const loading = state === "loading";
   return (
@@ -89,28 +148,52 @@ function ConnectionToggle({
   );
 }
 
+interface FormState {
+  editingId: string | null;
+  title: string;
+  category: CatKey;
+  customCategory: string;
+  allDay: boolean;
+  startTime: string;
+  endTime: string;
+}
+const addDefaults = (): FormState => ({
+  editingId: null,
+  title: "",
+  category: "etc",
+  customCategory: "",
+  allDay: true,
+  startTime: "",
+  endTime: "",
+});
+
 export function CalendarBoard() {
   const today = useMemo(() => new Date(), []);
   const [cursor, setCursor] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [state, setState] = useState<ConnState>("loading");
   const [events, setEvents] = useState<CalEvent[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
-  const [selected, setSelected] = useState<string>(dayKey(today));
   const [busy, setBusy] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerYear, setPickerYear] = useState(today.getFullYear());
 
-  // 일정 추가/편집 폼. editingId=null 이면 새 일정, 값이 있으면 그 일정 수정.
-  const [form, setForm] = useState<{
-    editingId: string | null;
-    title: string;
-    allDay: boolean;
-    startTime: string;
-    endTime: string;
-  }>({ editingId: null, title: "", allDay: false, startTime: "", endTime: "" });
+  // 선택/생성 대상 기간 (inclusive). 단일 날짜면 start===end.
+  const [rangeStart, setRangeStart] = useState(dayKey(today));
+  const [rangeEnd, setRangeEnd] = useState(dayKey(today));
+  const [form, setForm] = useState<FormState>(addDefaults());
+
+  // 드래그 선택 상태(refs — window mouseup 핸들러에서 최신값 사용).
+  const draggingRef = useRef(false);
+  const anchorRef = useRef<string | null>(null);
 
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
+
+  const setRange = useCallback((a: string, b: string) => {
+    const [s, e] = a <= b ? [a, b] : [b, a];
+    setRangeStart(s);
+    setRangeEnd(e);
+  }, []);
 
   const load = useCallback(async () => {
     setState("loading");
@@ -139,22 +222,35 @@ export function CalendarBoard() {
     load();
   }, [load]);
 
-  // 다른 날짜를 선택하면 편집 폼 초기화(새 일정 추가 모드로).
+  // 드래그 종료 → 새 선택을 추가 모드로 확정.
   useEffect(() => {
-    setForm({ editingId: null, title: "", allDay: false, startTime: "", endTime: "" });
-  }, [selected]);
+    const onUp = () => {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      anchorRef.current = null;
+      setForm(addDefaults());
+    };
+    window.addEventListener("mouseup", onUp);
+    return () => window.removeEventListener("mouseup", onUp);
+  }, []);
 
-  const byDay = useMemo(() => {
+  // 이벤트를 걸친 모든 날짜에 배치(다일 일정은 여러 칸에 표시).
+  const spanByDay = useMemo(() => {
     const map: Record<string, CalEvent[]> = {};
     for (const ev of events) {
-      const k = eventDayKey(ev);
-      if (!k) continue;
-      (map[k] ??= []).push(ev);
+      const { startKey, endKey } = getSpan(ev);
+      if (!startKey) continue;
+      let cur = startKey;
+      let guard = 0;
+      while (cur <= endKey && guard < 400) {
+        (map[cur] ??= []).push(ev);
+        cur = addDaysYMD(cur, 1);
+        guard++;
+      }
     }
     return map;
   }, [events]);
 
-  // 날짜별 공휴일/기념일 조회 (한 날에 여러 개일 수 있음)
   const holidayByDay = useMemo(() => {
     const map: Record<string, Holiday[]> = {};
     for (const h of holidays) (map[h.date] ??= []).push(h);
@@ -171,7 +267,20 @@ export function CalendarBoard() {
     return arr;
   }, [year, month]);
 
-  const selectedEvents = byDay[selected] ?? [];
+  // 선택 기간과 겹치는 일정 + 그 안의 공휴일.
+  const panelEvents = useMemo(
+    () =>
+      events.filter((ev) => {
+        const { startKey, endKey } = getSpan(ev);
+        return startKey && startKey <= rangeEnd && endKey >= rangeStart;
+      }),
+    [events, rangeStart, rangeEnd]
+  );
+  const rangeHolidays = useMemo(
+    () => holidays.filter((h) => h.date >= rangeStart && h.date <= rangeEnd),
+    [holidays, rangeStart, rangeEnd]
+  );
+  const isMultiDay = rangeStart !== rangeEnd;
 
   async function connectGoogle() {
     const supabase = createClient();
@@ -188,10 +297,8 @@ export function CalendarBoard() {
 
   async function handleToggle(next: boolean) {
     if (next) {
-      // 연동 켜기 → Google 동의 화면으로 이동
       await connectGoogle();
     } else {
-      // 연동 끄기 → 토큰 폐기
       if (!confirm("Google 캘린더 연동을 해제할까요? 다시 켤 때 재동의가 필요합니다.")) return;
       setState("loading");
       await fetch("/api/google/disconnect", { method: "POST" });
@@ -204,29 +311,44 @@ export function CalendarBoard() {
     setPickerOpen(false);
   }
 
-  function resetForm() {
-    setForm({ editingId: null, title: "", allDay: false, startTime: "", endTime: "" });
+  // ── 그리드 드래그/클릭 선택 ──
+  function beginDrag(k: string, e: React.MouseEvent) {
+    e.preventDefault();
+    draggingRef.current = true;
+    anchorRef.current = k;
+    setRange(k, k);
+  }
+  function extendDrag(k: string) {
+    if (!draggingRef.current || !anchorRef.current) return;
+    setRange(anchorRef.current, k);
+  }
+  // 키보드 접근성: Enter/Space 로 단일 날짜 선택.
+  function selectSingle(k: string) {
+    setRange(k, k);
+    setForm(addDefaults());
   }
 
-  // 기존 일정을 클릭하면 폼에 채워 편집 모드로 전환.
+  function resetForm() {
+    setForm(addDefaults());
+  }
+
+  // 기존 일정 클릭 → 그 기간으로 선택 이동 + 폼 채우고 편집 모드.
   function startEdit(ev: CalEvent) {
-    const toHHMM = (iso: string | null) => {
-      if (!iso) return "";
-      const d = new Date(iso);
-      return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-    };
+    const { startKey, endKey } = getSpan(ev);
+    setRange(startKey, endKey);
     setForm({
       editingId: ev.id,
       title: ev.title,
+      category: (ev.category as CatKey) ?? "etc",
+      customCategory: ev.category === "custom" ? ev.categoryLabel ?? "" : "",
       allDay: ev.allDay,
       startTime: ev.allDay ? "" : toHHMM(ev.startsAt),
       endTime: ev.allDay ? "" : toHHMM(ev.endsAt),
     });
   }
 
-  // selected("YYYY-MM-DD") + "HH:MM" → 로컬 시각 ISO
-  function combine(time: string) {
-    const [y, mo, d] = selected.split("-").map(Number);
+  function combine(dateYMD: string, time: string) {
+    const [y, mo, d] = dateYMD.split("-").map(Number);
     const [hh, mm] = time.split(":").map(Number);
     return new Date(y, mo - 1, d, hh, mm).toISOString();
   }
@@ -234,22 +356,26 @@ export function CalendarBoard() {
   async function submitForm() {
     if (!form.title.trim()) return;
     setBusy(true);
+
     const allDay = form.allDay || !form.startTime;
     let startsAt: string;
     let endsAt: string;
     if (allDay) {
-      startsAt = selected;
-      endsAt = selected;
+      startsAt = rangeStart;
+      endsAt = rangeEnd;
     } else {
-      startsAt = combine(form.startTime);
+      startsAt = combine(rangeStart, form.startTime);
       endsAt = form.endTime
-        ? combine(form.endTime)
+        ? combine(rangeEnd, form.endTime)
         : new Date(new Date(startsAt).getTime() + 60 * 60 * 1000).toISOString();
-      // 종료가 시작보다 빠르면 1시간으로 보정
       if (new Date(endsAt) <= new Date(startsAt)) {
         endsAt = new Date(new Date(startsAt).getTime() + 60 * 60 * 1000).toISOString();
       }
     }
+
+    const cat = catOf(form.category);
+    const categoryLabel = form.category === "custom" ? form.customCategory.trim() || "기타" : cat.label;
+
     try {
       if (form.editingId) {
         await fetch("/api/google/calendar", {
@@ -261,13 +387,22 @@ export function CalendarBoard() {
             startsAt,
             endsAt,
             allDay,
+            category: form.category,
+            categoryLabel,
           }),
         });
       } else {
         await fetch("/api/google/calendar", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: form.title.trim(), startsAt, endsAt, allDay }),
+          body: JSON.stringify({
+            title: form.title.trim(),
+            startsAt,
+            endsAt,
+            allDay,
+            category: form.category,
+            categoryLabel,
+          }),
         });
       }
       resetForm();
@@ -319,7 +454,7 @@ export function CalendarBoard() {
               <button
                 onClick={() => {
                   setCursor(new Date(today.getFullYear(), today.getMonth(), 1));
-                  setSelected(dayKey(today));
+                  selectSingle(dayKey(today));
                 }}
                 className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-zinc-300 transition-all duration-300 ease-out-back hover:scale-102 hover:bg-white/[0.08]"
               >
@@ -364,8 +499,7 @@ export function CalendarBoard() {
                   <div className="grid grid-cols-3 gap-1.5">
                     {MONTHS.map((label, m) => {
                       const isCurrent = pickerYear === year && m === month;
-                      const isThisMonth =
-                        pickerYear === today.getFullYear() && m === today.getMonth();
+                      const isThisMonth = pickerYear === today.getFullYear() && m === today.getMonth();
                       return (
                         <button
                           key={label}
@@ -423,21 +557,30 @@ export function CalendarBoard() {
                 if (!d) return <div key={`e${i}`} className="min-h-[64px] sm:min-h-[88px]" />;
                 const k = dayKey(d);
                 const isToday = k === dayKey(today);
-                const isSelected = k === selected;
-                const dayEvents = byDay[k] ?? [];
+                const inRange = k >= rangeStart && k <= rangeEnd;
+                const isEnd = k === rangeStart || k === rangeEnd;
+                const dayEvents = spanByDay[k] ?? [];
                 const dayHols = holidayByDay[k] ?? [];
                 const publicHol = dayHols.find((h) => h.isPublic);
                 const dow = d.getDay();
-                // 공휴일이거나 일요일이면 빨간 날짜
                 const isRed = dow === 0 || !!publicHol;
                 return (
                   <button
                     key={k}
-                    onClick={() => setSelected(k)}
+                    onMouseDown={(e) => beginDrag(k, e)}
+                    onMouseEnter={() => extendDrag(k)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        selectSingle(k);
+                      }
+                    }}
                     className={[
-                      "flex min-h-[64px] flex-col gap-1 rounded-xl border p-1.5 text-left transition-all duration-300 ease-out-back sm:min-h-[88px]",
-                      isSelected
-                        ? "border-accent/50 bg-accent/10 shadow-bezel"
+                      "flex min-h-[64px] flex-col gap-1 rounded-xl border p-1.5 text-left transition-colors duration-200 sm:min-h-[88px]",
+                      inRange
+                        ? isEnd
+                          ? "border-accent/60 bg-accent/15 shadow-bezel"
+                          : "border-accent/30 bg-accent/[0.08]"
                         : publicHol
                         ? "border-rose-400/20 bg-rose-400/[0.04] hover:bg-rose-400/[0.08]"
                         : "border-white/[0.06] bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.05]",
@@ -458,31 +601,35 @@ export function CalendarBoard() {
                       {d.getDate()}
                     </span>
                     <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden">
-                      {/* 공휴일/기념일 칩 */}
                       {dayHols.map((h) => (
                         <span
                           key={h.title}
                           className={[
                             "truncate rounded-md px-1 py-px text-[10px] leading-tight",
-                            h.isPublic
-                              ? "bg-rose-400/20 text-rose-200"
-                              : "bg-white/[0.06] text-zinc-400",
+                            h.isPublic ? "bg-rose-400/20 text-rose-200" : "bg-white/[0.06] text-zinc-400",
                           ].join(" ")}
                           title={h.title}
                         >
                           {h.title}
                         </span>
                       ))}
-                      {dayEvents.slice(0, 3 - Math.min(dayHols.length, 2)).map((ev) => (
-                        <span
-                          key={ev.id}
-                          className="truncate rounded-md bg-accent-cool/20 px-1 py-px text-[10px] leading-tight text-accent-cool"
-                          title={ev.title}
-                        >
-                          {ev.allDay ? "" : "• "}
-                          {ev.title}
-                        </span>
-                      ))}
+                      {dayEvents.slice(0, 3 - Math.min(dayHols.length, 2)).map((ev) => {
+                        const c = catOf(ev.category);
+                        return (
+                          <span
+                            key={ev.id}
+                            className={[
+                              "flex items-center gap-0.5 truncate rounded-md px-1 py-px text-[10px] leading-tight",
+                              c.bg,
+                              c.text,
+                            ].join(" ")}
+                            title={ev.title}
+                          >
+                            <c.Icon className="h-2.5 w-2.5 shrink-0" />
+                            <span className="truncate">{ev.title}</span>
+                          </span>
+                        );
+                      })}
                       {dayEvents.length > 3 - Math.min(dayHols.length, 2) && (
                         <span className="px-1 text-[10px] text-zinc-500">
                           +{dayEvents.length - (3 - Math.min(dayHols.length, 2))}건
@@ -493,24 +640,27 @@ export function CalendarBoard() {
                 );
               })}
             </div>
+            <p className="mt-2 text-[11px] text-zinc-600">
+              날짜를 드래그하면 기간이 선택돼요. 클릭은 하루 선택.
+            </p>
           </div>
         )}
       </div>
 
-      {/* ── 선택한 날짜 패널 ── */}
+      {/* ── 선택한 기간 패널 ── */}
       {state === "connected" && (
         <div className="w-full shrink-0 border-t border-white/5 pt-5 lg:w-72 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
           <div className="mb-3 flex items-center gap-2">
             <CalendarDays className="h-4 w-4 text-accent" />
             <h3 className="text-sm font-semibold text-zinc-100">
-              {Number(selected.slice(5, 7))}월 {Number(selected.slice(8, 10))}일
+              {isMultiDay ? `${mdLabel(rangeStart)} ~ ${mdLabel(rangeEnd)}` : `${mdLabel(rangeStart)}`}
             </h3>
-            <span className="text-[11px] text-zinc-500">{selectedEvents.length}건</span>
+            <span className="text-[11px] text-zinc-500">{panelEvents.length}건</span>
           </div>
 
-          {(holidayByDay[selected] ?? []).map((h) => (
+          {rangeHolidays.map((h) => (
             <div
-              key={h.title}
+              key={h.date + h.title}
               className={[
                 "mb-2 flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs",
                 h.isPublic
@@ -525,33 +675,40 @@ export function CalendarBoard() {
           ))}
 
           <ul className="mb-4 space-y-2">
-            {selectedEvents.length === 0 && (
+            {panelEvents.length === 0 && (
               <li className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3 text-center text-xs text-zinc-500">
                 일정이 없습니다.
               </li>
             )}
-            {selectedEvents.map((ev) => {
+            {panelEvents.map((ev) => {
               const editing = form.editingId === ev.id;
+              const c = catOf(ev.category);
+              const label = ev.category === "custom" ? ev.categoryLabel || "직접입력" : c.label;
               return (
                 <li
                   key={ev.id}
                   className={[
                     "group flex items-center gap-2 rounded-xl border px-3 py-2 transition-colors",
-                    editing
-                      ? "border-accent/40 bg-accent/10"
-                      : "border-white/5 bg-white/[0.03] hover:bg-white/[0.06]",
+                    editing ? "border-accent/40 bg-accent/10" : "border-white/5 bg-white/[0.03] hover:bg-white/[0.06]",
                   ].join(" ")}
                 >
-                  {/* 본문 클릭 → 편집 모드 */}
                   <button
                     onClick={() => startEdit(ev)}
                     className="flex min-w-0 flex-1 items-center gap-2 text-left"
                     title="클릭하여 수정"
                   >
-                    <span className="h-7 w-1 shrink-0 rounded-full bg-accent-cool" />
+                    <span className={`h-7 w-1 shrink-0 rounded-full ${c.solid}`} />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm text-zinc-100">{ev.title}</span>
-                      <span className="block text-[11px] text-zinc-500">{fmtTime(ev.startsAt, ev.allDay)}</span>
+                      <span className="flex items-center gap-1">
+                        <span
+                          className={`flex shrink-0 items-center gap-0.5 rounded px-1 py-px text-[9px] ${c.bg} ${c.text}`}
+                        >
+                          <c.Icon className="h-2.5 w-2.5" />
+                          {label}
+                        </span>
+                        <span className="min-w-0 truncate text-sm text-zinc-100">{ev.title}</span>
+                      </span>
+                      <span className="mt-0.5 block text-[11px] text-zinc-500">{fmtWhen(ev)}</span>
                     </span>
                   </button>
                   <button
@@ -577,9 +734,7 @@ export function CalendarBoard() {
 
           <div className="space-y-2.5 rounded-2xl border border-white/5 bg-white/[0.02] p-3">
             <div className="flex items-center justify-between">
-              <p className="text-[11px] font-medium text-zinc-400">
-                {form.editingId ? "일정 수정" : "이 날에 일정 추가"}
-              </p>
+              <p className="text-[11px] font-medium text-zinc-400">{form.editingId ? "일정 수정" : "일정 추가"}</p>
               {form.editingId && (
                 <button
                   onClick={resetForm}
@@ -597,6 +752,53 @@ export function CalendarBoard() {
               placeholder="일정 제목"
               className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-accent/40 focus:outline-none"
             />
+
+            {/* 카테고리 선택 */}
+            <div className="grid grid-cols-3 gap-1.5">
+              {CATEGORIES.map((c) => {
+                const on = form.category === c.key;
+                return (
+                  <button
+                    key={c.key}
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, category: c.key }))}
+                    className={[
+                      "flex items-center justify-center gap-1 rounded-lg border px-1.5 py-2 text-[11px] font-medium transition-all duration-200",
+                      on ? `${c.border} ${c.soft} ${c.text}` : "border-white/10 bg-white/[0.03] text-zinc-400 hover:bg-white/[0.06]",
+                    ].join(" ")}
+                  >
+                    <c.Icon className="h-3.5 w-3.5 shrink-0" />
+                    {c.label}
+                  </button>
+                );
+              })}
+            </div>
+            {form.category === "custom" && (
+              <input
+                value={form.customCategory}
+                onChange={(e) => setForm((f) => ({ ...f, customCategory: e.target.value }))}
+                placeholder="카테고리 직접 입력"
+                className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-accent/40 focus:outline-none"
+              />
+            )}
+
+            {/* 기간 (직접 지정 가능) */}
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={rangeStart}
+                onChange={(e) => e.target.value && setRange(e.target.value, rangeEnd)}
+                className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-2 text-xs text-zinc-100 focus:border-accent/40 focus:outline-none [color-scheme:dark]"
+              />
+              <span className="text-xs text-zinc-600">~</span>
+              <input
+                type="date"
+                value={rangeEnd}
+                min={rangeStart}
+                onChange={(e) => e.target.value && setRange(rangeStart, e.target.value)}
+                className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-2 text-xs text-zinc-100 focus:border-accent/40 focus:outline-none [color-scheme:dark]"
+              />
+            </div>
 
             {/* 종일 토글 */}
             <label className="flex cursor-pointer items-center justify-between rounded-lg px-1 py-0.5">
@@ -655,7 +857,7 @@ export function CalendarBoard() {
             </button>
 
             <p className="text-[10px] text-zinc-600">
-              종일을 끄고 시작 시간만 지정하면 1시간 일정. 추가·수정·삭제 모두 실제 Google 캘린더에 반영됩니다.
+              여러 날을 드래그하거나 기간을 직접 정할 수 있어요. 종일을 끄면 시간 일정이 됩니다. 추가·수정·삭제는 실제 Google 캘린더에 반영됩니다.
             </p>
           </div>
         </div>
