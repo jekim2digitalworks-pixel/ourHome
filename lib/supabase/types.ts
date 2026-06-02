@@ -27,6 +27,12 @@ export interface Database {
         Update: { name?: string };
         Relationships: [];
       };
+      memos: {
+        Row: { id: string; family_id: string; author_id: string; content: string; created_at: string };
+        Insert: { family_id: string; author_id: string; content: string };
+        Update: Partial<{ content: string }>;
+        Relationships: [];
+      };
       users: {
         Row: {
           id: string;
@@ -168,6 +174,40 @@ export interface Database {
         };
         Insert: { family_id: string; name: string; sort_order?: number };
         Update: Partial<{ name: string; sort_order: number }>;
+        Relationships: [];
+      };
+      budgets: {
+        Row: {
+          id: string;
+          family_id: string;
+          category: string;
+          amount_minor: number;
+          created_at: string;
+        };
+        Insert: { family_id: string; category: string; amount_minor: number };
+        Update: Partial<{ amount_minor: number }>;
+        Relationships: [];
+      };
+      todos: {
+        Row: {
+          id: string;
+          family_id: string;
+          author_id: string;
+          kind: "todo" | "shopping";
+          title: string;
+          done: boolean;
+          done_by: string | null;
+          done_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          family_id: string;
+          author_id: string;
+          kind?: "todo" | "shopping";
+          title: string;
+          done?: boolean;
+        };
+        Update: Partial<{ title: string; done: boolean; done_by: string | null; done_at: string | null }>;
         Relationships: [];
       };
       google_tokens: {

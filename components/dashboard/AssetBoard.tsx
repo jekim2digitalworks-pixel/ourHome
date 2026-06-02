@@ -10,7 +10,9 @@ import {
   Loader2,
   Trash2,
   Pin,
+  AlertTriangle,
 } from "lucide-react";
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { createClient } from "@/lib/supabase/client";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { formatKRW, parseToMinor, sumMinor } from "@/lib/format";
@@ -70,6 +72,11 @@ export function AssetBoard({
   const [isFixed, setIsFixed] = useState(false);
   const [day, setDay] = useState(() => new Date().toISOString().slice(0, 10));
 
+  // 카테고리별 월 예산(category -> amount_minor)과 6개월 추세
+  const [budgets, setBudgets] = useState<Record<string, number>>({});
+  const [budgetOpen, setBudgetOpen] = useState(false);
+  const [trend, setTrend] = useState<{ label: string; income: number; expense: number }[]>([]);
+
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
   const monthKey = `${year}-${String(month + 1).padStart(2, "0")}`;
@@ -120,6 +127,77 @@ export function AssetBoard({
     };
   }, [familyId, monthKey]);
 
+  // 예산 로드 + 실시간 동기화
+  useEffect(() => {
+    const supabase = createClient();
+    const loadBudgets = async () => {
+      const { data } = await supabase
+        .from("budgets")
+        .select("category, amount_minor")
+        .eq("family_id", familyId);
+      setBudgets(Object.fromEntries((data ?? []).map((b) => [b.category, b.amount_minor])));
+    };
+    loadBudgets();
+    const ch = supabase
+      .channel(`budgets:${familyId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "budgets", filter: `family_id=eq.${familyId}` },
+        () => loadBudgets()
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [familyId]);
+
+  // 최근 6개월 수입/지출 추세 (현재 보고 있는 달 기준 역순 6칸)
+  useEffect(() => {
+    const supabase = createClient();
+    (async () => {
+      const start = new Date(year, month - 5, 1).toISOString().slice(0, 10);
+      const end = new Date(year, month + 1, 1).toISOString().slice(0, 10);
+      const { data } = await supabase
+        .from("transactions")
+        .select("type, amount_minor, occurred_on")
+        .eq("family_id", familyId)
+        .gte("occurred_on", start)
+        .lt("occurred_on", end);
+      const buckets: { label: string; income: number; expense: number }[] = [];
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(year, month - i, 1);
+        buckets.push({ label: `${d.getMonth() + 1}월`, income: 0, expense: 0 });
+      }
+      for (const t of data ?? []) {
+        const d = new Date(t.occurred_on);
+        const idx = (d.getFullYear() - year) * 12 + d.getMonth() - month + 5;
+        if (idx < 0 || idx > 5) continue;
+        if (t.type === "income") buckets[idx].income += t.amount_minor;
+        else buckets[idx].expense += t.amount_minor;
+      }
+      setTrend(buckets);
+    })();
+  }, [familyId, monthKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function saveBudget(cat: string, value: string) {
+    const amount_minor = parseToMinor(value);
+    const supabase = createClient();
+    if (!amount_minor) {
+      await supabase.from("budgets").delete().eq("family_id", familyId).eq("category", cat);
+      setBudgets((prev) => {
+        const n = { ...prev };
+        delete n[cat];
+        return n;
+      });
+      return;
+    }
+    await supabase.from("budgets").upsert(
+      { family_id: familyId, category: cat, amount_minor },
+      { onConflict: "family_id,category" }
+    );
+    setBudgets((prev) => ({ ...prev, [cat]: amount_minor }));
+  }
+
   const { income, expense, net } = useMemo(() => {
     const income = sumMinor(txs.filter((t) => t.type === "income").map((t) => t.amount_minor));
     const expense = sumMinor(txs.filter((t) => t.type === "expense").map((t) => t.amount_minor));
@@ -127,11 +205,26 @@ export function AssetBoard({
   }, [txs]);
 
   // 지출 카테고리별 합계 (큰 순)
-  const byCategory = useMemo(() => {
+  const spentMap = useMemo(() => {
     const map: Record<string, number> = {};
     for (const t of txs) if (t.type === "expense") map[t.category] = (map[t.category] ?? 0) + t.amount_minor;
-    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+    return map;
   }, [txs]);
+  const byCategory = useMemo(
+    () => Object.entries(spentMap).sort((a, b) => b[1] - a[1]),
+    [spentMap]
+  );
+
+  // 예산 초과·임박 경고
+  const totalBudget = useMemo(() => sumMinor(Object.values(budgets)), [budgets]);
+  const budgetAlerts = useMemo(
+    () =>
+      Object.entries(budgets)
+        .map(([cat, limit]) => ({ cat, limit, spent: spentMap[cat] ?? 0 }))
+        .filter((b) => b.spent >= b.limit * 0.9)
+        .sort((a, b) => b.spent / b.limit - a.spent / a.limit),
+    [budgets, spentMap]
+  );
 
   async function add() {
     const amount_minor = parseToMinor(amount);
@@ -210,9 +303,92 @@ export function AssetBoard({
           <Stat label="잔액" value={net} tone={net >= 0 ? "up" : "down"} emphasize />
         </div>
 
+        {/* 예산 경고 */}
+        {budgetAlerts.length > 0 && (
+          <div className="mt-4 space-y-1.5">
+            {budgetAlerts.map(({ cat, limit, spent }) => {
+              const over = spent > limit;
+              return (
+                <div
+                  key={cat}
+                  className={[
+                    "flex items-center gap-2 rounded-xl border px-3 py-2 text-xs",
+                    over
+                      ? "border-rose-400/30 bg-rose-400/10 text-rose-200"
+                      : "border-amber-400/30 bg-amber-400/10 text-amber-200",
+                  ].join(" ")}
+                >
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                  <span className="font-medium">{cat}</span>
+                  <span className="flex-1 truncate">
+                    {over ? "예산 초과" : "예산 임박"} · {formatKRW(spent)} / {formatKRW(limit)}
+                  </span>
+                  <span className="shrink-0 font-semibold">{Math.round((spent / limit) * 100)}%</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* 6개월 추세 */}
+        {trend.some((t) => t.income || t.expense) && (
+          <div className="mt-5">
+            <p className="mb-2 text-xs font-medium text-zinc-400">최근 6개월 추세</p>
+            <div className="h-36 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={trend} margin={{ top: 4, right: 4, left: 4, bottom: 0 }} barGap={2}>
+                  <XAxis dataKey="label" tick={{ fill: "#a1a1aa", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    cursor={{ fill: "rgba(255,255,255,0.04)" }}
+                    contentStyle={{
+                      background: "rgba(24,24,27,0.95)",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      borderRadius: 12,
+                      fontSize: 12,
+                    }}
+                    labelStyle={{ color: "#e4e4e7" }}
+                    formatter={(v: number, name) => [formatKRW(v), name === "income" ? "수입" : "지출"]}
+                  />
+                  <Bar dataKey="income" fill="#34d399" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="expense" fill="#fb7185" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+
         {/* 카테고리 분석 */}
         <div className="mt-5">
-          <p className="mb-2 text-xs font-medium text-zinc-400">지출 카테고리</p>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-medium text-zinc-400">
+              지출 카테고리{totalBudget > 0 && <span className="text-zinc-600"> · 예산 {formatKRW(totalBudget)}</span>}
+            </p>
+            <button
+              onClick={() => setBudgetOpen((v) => !v)}
+              className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-zinc-300 transition-all duration-300 ease-out-back hover:bg-white/[0.08]"
+            >
+              {budgetOpen ? "닫기" : "예산 설정"}
+            </button>
+          </div>
+
+          {budgetOpen && (
+            <div className="mb-3 grid grid-cols-2 gap-1.5 rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
+              {EXPENSE_CATS.map((c) => (
+                <div key={c} className="flex items-center gap-1.5">
+                  <span className="w-10 shrink-0 text-[11px] text-zinc-400">{c}</span>
+                  <input
+                    inputMode="numeric"
+                    defaultValue={budgets[c] ? String(budgets[c]) : ""}
+                    onBlur={(e) => e.target.value !== (budgets[c] ? String(budgets[c]) : "") && saveBudget(c, e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+                    placeholder="한도"
+                    className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-right text-xs text-zinc-100 placeholder:text-zinc-600 focus:border-accent/40 focus:outline-none"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
           {byCategory.length === 0 ? (
             <p className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-4 text-center text-xs text-zinc-500">
               이번 달 지출이 없습니다.
@@ -220,18 +396,26 @@ export function AssetBoard({
           ) : (
             <ul className="space-y-2">
               {byCategory.map(([cat, amt], i) => {
-                const pct = expense > 0 ? Math.round((amt / expense) * 100) : 0;
+                const limit = budgets[cat];
+                const denom = limit ?? expense;
+                const pct = denom > 0 ? Math.round((amt / denom) * 100) : 0;
+                const over = !!limit && amt > limit;
                 return (
                   <li key={cat} className="flex items-center gap-3">
                     <span className="w-12 shrink-0 text-xs text-zinc-400">{cat}</span>
                     <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/[0.05]">
                       <div
-                        className={`h-full rounded-full ${CAT_COLOR[i % CAT_COLOR.length]}`}
-                        style={{ width: `${pct}%` }}
+                        className={`h-full rounded-full ${over ? "bg-rose-400" : CAT_COLOR[i % CAT_COLOR.length]}`}
+                        style={{ width: `${Math.min(100, pct)}%` }}
                       />
                     </div>
-                    <span className="w-24 shrink-0 text-right text-xs text-zinc-300">{formatKRW(amt)}</span>
-                    <span className="w-9 shrink-0 text-right text-[11px] text-zinc-500">{pct}%</span>
+                    <span className="w-24 shrink-0 text-right text-xs text-zinc-300">
+                      {formatKRW(amt)}
+                      {limit && <span className="text-zinc-600">/{formatKRW(limit)}</span>}
+                    </span>
+                    <span className={`w-9 shrink-0 text-right text-[11px] ${over ? "text-rose-300" : "text-zinc-500"}`}>
+                      {pct}%
+                    </span>
                   </li>
                 );
               })}

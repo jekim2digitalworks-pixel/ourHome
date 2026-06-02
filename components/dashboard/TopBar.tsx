@@ -1,5 +1,6 @@
 "use client";
 
+import { ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 
 export function TopBar({
@@ -8,20 +9,24 @@ export function TopBar({
   displayName,
   avatarUrl,
   onOpenMyPage,
+  headerSlot,
 }: {
   title: string;
   subtitle?: string;
   displayName?: string;
   avatarUrl?: string | null;
   onOpenMyPage: () => void;
+  headerSlot?: ReactNode;
 }) {
   const initial = (displayName || "?").trim().charAt(0).toUpperCase();
   return (
     <header className="glass sticky top-3 z-30 mx-3 mb-6 flex items-center gap-3 rounded-2xl px-4 py-3 lg:mx-0">
-      <div className="min-w-0 flex-1">
-        <h1 className="truncate text-lg font-semibold tracking-tight text-zinc-100">{title}</h1>
-        {subtitle && <p className="truncate text-xs text-zinc-500">{subtitle}</p>}
-      </div>
+      {headerSlot ?? (
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-lg font-semibold tracking-tight text-zinc-100">{title}</h1>
+          {subtitle && <p className="truncate text-xs text-zinc-500">{subtitle}</p>}
+        </div>
+      )}
 
       {/* 마이페이지 */}
       <button

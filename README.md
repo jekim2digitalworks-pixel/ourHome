@@ -55,6 +55,12 @@ ourHome/
 ```bash
 npm install
 # 1) Supabase 프로젝트 SQL 에디터에 supabase/schema.sql 전체 실행
+#    이어서 마이그레이션도 순서대로 실행:
+#      supabase/migration_baby_categories.sql  (육아 카테고리 확장)
+#      supabase/migration_photos.sql           (사진 카테고리)
+#      supabase/migration_drive_folders.sql    (Drive 폴더)
+#      supabase/migration_todos.sql            (공유 할일·장보기)
+#      supabase/migration_budgets.sql          (카테고리별 월 예산)
 # 2) Google Cloud에서 Calendar/Drive API 활성화 + OAuth 동의 화면 + 자격증명
 # 3) .env.local 작성
 cp .env.local.example .env.local   # Windows: copy .env.local.example .env.local

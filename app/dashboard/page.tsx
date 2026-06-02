@@ -14,6 +14,9 @@ import { BabyTimelineCard } from "@/components/dashboard/BabyTimelineCard";
 import { BabyChart } from "@/components/dashboard/BabyChart";
 import { PhotoCoverflowCard } from "@/components/dashboard/PhotoCoverflowCard";
 import { PhotoBoard } from "@/components/dashboard/PhotoBoard";
+import { TodoSummaryCard } from "@/components/dashboard/TodoSummaryCard";
+import { TodoBoard } from "@/components/dashboard/TodoBoard";
+import { FamilyMemo } from "@/components/dashboard/FamilyMemo";
 import { SettingsPanel } from "@/components/dashboard/SettingsPanel";
 import { FamilyOnboarding } from "@/components/dashboard/FamilyOnboarding";
 import { MyPageModal } from "@/components/dashboard/MyPageModal";
@@ -24,6 +27,7 @@ const TITLES: Record<TabKey, { title: string; subtitle: string }> = {
   calendar: { title: "캘린더", subtitle: "자체 일정 + Google Calendar" },
   assets: { title: "자산 관리", subtitle: "스마트 가계부" },
   baby: { title: "육아 차트", subtitle: "실시간 타임라인" },
+  todos: { title: "할일 · 장보기", subtitle: "함께 보는 공유 체크리스트" },
   photos: { title: "사진첩", subtitle: "Google Drive 연동" },
   settings: { title: "설정", subtitle: "대시보드 개인화" },
 };
@@ -38,7 +42,7 @@ interface Profile {
 
 export default function DashboardPage() {
   const [active, setActiveState] = useState<TabKey>("overview");
-  const [enabled, setEnabled] = useState<TabKey[]>(["calendar", "assets", "baby", "photos"]);
+  const [enabled, setEnabled] = useState<TabKey[]>(["calendar", "assets", "baby", "todos", "photos"]);
 
   // 탭을 URL(?tab=)과 동기화해 브라우저 뒤로/앞으로가 탭 사이를 오가게 한다.
   useEffect(() => {
@@ -60,6 +64,7 @@ export default function DashboardPage() {
   const [primary, setPrimary] = useState<TabKey>("baby");
 
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [homeName, setHomeName] = useState("our home");
   const [members, setMembers] = useState<Record<string, { name: string; avatar: string | null }>>({});
   const [profileLoading, setProfileLoading] = useState(true);
   const [myPageOpen, setMyPageOpen] = useState(false);
@@ -93,7 +98,27 @@ export default function DashboardPage() {
           (mem ?? []).map((m) => [m.id, { name: m.display_name ?? "익명", avatar: m.avatar_url ?? null }])
         )
       );
+      const { data: fam } = await supabase.from("families").select("name").eq("id", familyId).single();
+      setHomeName(fam?.name?.trim() || "our home");
+    } else {
+      setHomeName("our home");
     }
+
+    // 저장된 대시보드 개인화(활성 탭·메인) 복원
+    const { data: st } = await supabase
+      .from("settings")
+      .select("enabled_tabs, primary_tab")
+      .eq("user_id", user.id)
+      .single();
+    if (st) {
+      const valid: TabKey[] = ["calendar", "assets", "baby", "todos", "photos"];
+      const en = ((st.enabled_tabs as TabKey[]) ?? []).filter((k) => valid.includes(k));
+      // 'todos'는 이후 추가된 모듈 — 옛 설정엔 없으므로 자동 노출(사용자가 끈 게 아님).
+      if (en.length && !en.includes("todos")) en.push("todos");
+      if (en.length) setEnabled(en);
+      if (st.primary_tab && valid.includes(st.primary_tab as TabKey)) setPrimary(st.primary_tab as TabKey);
+    }
+
     setProfileLoading(false);
   }, []);
 
@@ -101,8 +126,34 @@ export default function DashboardPage() {
     loadProfile();
   }, [loadProfile]);
 
+  // 개인화 변경을 public.settings 에 즉시 저장(없으면 생성).
+  const persistSettings = useCallback(
+    async (next: { enabled?: TabKey[]; primary?: TabKey }) => {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      await supabase.from("settings").upsert({
+        user_id: user.id,
+        ...(next.enabled ? { enabled_tabs: next.enabled } : {}),
+        ...(next.primary ? { primary_tab: next.primary } : {}),
+      });
+    },
+    []
+  );
+
   const toggle = (key: TabKey) =>
-    setEnabled((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+    setEnabled((prev) => {
+      const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
+      persistSettings({ enabled: next });
+      return next;
+    });
+
+  const choosePrimary = (key: TabKey) => {
+    setPrimary(key);
+    persistSettings({ primary: key });
+  };
 
   const orderedCards = useMemo<TabKey[]>(() => {
     const rest = enabled.filter((k) => k !== primary);
@@ -122,7 +173,7 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-[1400px]">
-      <Sidebar active={active} onChange={setActive} enabled={enabled} />
+      <Sidebar active={active} onChange={setActive} enabled={enabled} homeName={homeName} />
 
       <main className="min-w-0 flex-1 px-3 pb-28 pt-3 lg:px-8 lg:pb-10">
         <TopBar
@@ -131,6 +182,11 @@ export default function DashboardPage() {
           displayName={profile?.displayName}
           avatarUrl={profile?.avatarUrl}
           onOpenMyPage={() => setMyPageOpen(true)}
+          headerSlot={
+            active === "overview" && familyId && profile ? (
+              <FamilyMemo familyId={familyId} currentUserId={profile.userId} members={members} />
+            ) : undefined
+          }
         />
 
         {active === "overview" && (
@@ -164,6 +220,7 @@ export default function DashboardPage() {
                       members={members}
                     />
                   )}
+                  {key === "todos" && <TodoSummaryCard familyId={familyId ?? undefined} />}
                   {key === "photos" && <PhotoCoverflowCard familyId={familyId ?? undefined} />}
                 </div>
               ))}
@@ -204,6 +261,17 @@ export default function DashboardPage() {
             )}
           </div>
         )}
+        {active === "todos" && (
+          <div className="animate-fade-up">
+            {profileLoading ? (
+              <GlassCard className="py-10 text-center text-sm text-zinc-500">불러오는 중…</GlassCard>
+            ) : familyId && profile ? (
+              <TodoBoard familyId={familyId} currentUserId={profile.userId} members={members} />
+            ) : (
+              <FamilyOnboarding onDone={loadProfile} />
+            )}
+          </div>
+        )}
         {active === "photos" && (
           <div className="animate-fade-up">
             {profileLoading ? (
@@ -222,7 +290,7 @@ export default function DashboardPage() {
               enabled={enabled}
               primary={primary}
               onToggle={toggle}
-              onSetPrimary={setPrimary}
+              onSetPrimary={choosePrimary}
             />
           </div>
         )}
@@ -238,6 +306,8 @@ export default function DashboardPage() {
           email={profile.email}
           displayName={profile.displayName}
           avatarUrl={profile.avatarUrl}
+          familyId={profile.familyId}
+          homeName={homeName}
           onSaved={loadProfile}
         />
       )}

@@ -36,7 +36,7 @@ export default function Landing() {
           <a href="#features" className="transition-colors hover:text-zinc-100">소개</a>
         </div>
         <Link
-          href="/dashboard"
+          href="/signup"
           className="rounded-xl bg-accent/90 px-4 py-2 text-sm font-medium text-ink-900 transition-all duration-300 ease-out-back hover:scale-102 hover:bg-accent"
         >
           시작하기

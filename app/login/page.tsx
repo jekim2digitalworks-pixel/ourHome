@@ -16,6 +16,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [resetView, setResetView] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   // 콜백에서 code 교환 실패 시 ?error=auth 로 돌아옵니다.
   useEffect(() => {
@@ -82,6 +84,34 @@ export default function LoginPage() {
     setSent(true);
   }
 
+  // 비밀번호 재설정 메일 요청. 링크는 /auth/callback 에서 복구 세션으로 교환된 뒤
+  // /reset-password 페이지로 이동해 새 비밀번호를 설정합니다.
+  async function sendReset(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setErrorMsg(null);
+    const supabase = createClient();
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+    });
+    setLoading(false);
+    if (error) {
+      setErrorMsg(
+        error.status === 429
+          ? "이메일 발송 한도를 초과했어요. 잠시 후 다시 시도해 주세요."
+          : "메일 전송에 실패했어요. 잠시 후 다시 시도해 주세요."
+      );
+      return;
+    }
+    setResetSent(true);
+  }
+
+  function backToLogin() {
+    setResetView(false);
+    setResetSent(false);
+    setErrorMsg(null);
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center px-5">
       <GlassCard className="w-full max-w-sm p-7">
@@ -93,6 +123,56 @@ export default function LoginPage() {
           <p className="prose-ko mt-1 text-sm text-zinc-400">두 사람의 홈에 오신 것을 환영해요.</p>
         </div>
 
+        {resetView ? (
+          /* ── 비밀번호 재설정 요청 ── */
+          <div>
+            {resetSent ? (
+              <p className="prose-ko rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">
+                <strong>{email}</strong> 으로 재설정 링크를 보냈어요. 메일함을 확인하고 링크를 눌러 새
+                비밀번호를 설정해 주세요.
+              </p>
+            ) : (
+              <>
+                <p className="prose-ko mb-4 text-sm text-zinc-400">
+                  가입한 이메일을 입력하면 비밀번호 재설정 링크를 보내드려요.
+                </p>
+                {errorMsg && (
+                  <p className="prose-ko mb-3 rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
+                    {errorMsg}
+                  </p>
+                )}
+                <form onSubmit={sendReset} className="space-y-3">
+                  <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 focus-within:border-accent/40">
+                    <Mail className="h-4 w-4 text-zinc-500" />
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="w-full bg-transparent text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-ink-900 transition-all duration-300 ease-out-back hover:scale-102 hover:bg-accent-soft disabled:opacity-50"
+                  >
+                    {loading ? "처리 중…" : "재설정 메일 받기"}
+                    {!loading && <ArrowRight className="h-4 w-4" />}
+                  </button>
+                </form>
+              </>
+            )}
+            <button
+              onClick={backToLogin}
+              className="mt-5 block w-full text-center text-xs text-zinc-500 transition-colors hover:text-zinc-300"
+            >
+              ← 로그인으로 돌아가기
+            </button>
+          </div>
+        ) : (
+          <>
         {/* 통합 로그인: Google */}
         <button
           onClick={signInWithGoogle}
@@ -197,12 +277,36 @@ export default function LoginPage() {
               {loading ? "처리 중…" : mode === "password" ? "로그인" : "매직 링크 받기"}
               {!loading && <ArrowRight className="h-4 w-4" />}
             </button>
+
+            {mode === "password" && (
+              <button
+                type="button"
+                onClick={() => {
+                  setResetView(true);
+                  setErrorMsg(null);
+                }}
+                className="block w-full text-center text-xs text-zinc-500 transition-colors hover:text-zinc-300"
+              >
+                비밀번호를 잊으셨나요?
+              </button>
+            )}
           </form>
+        )}
+          </>
+        )}
+
+        {!resetView && (
+          <p className="mt-5 text-center text-xs text-zinc-500">
+            아직 계정이 없으신가요?{" "}
+            <Link href="/signup" className="text-accent transition-colors hover:text-accent-soft">
+              가입하기
+            </Link>
+          </p>
         )}
 
         <Link
           href="/"
-          className="mt-5 block text-center text-xs text-zinc-500 transition-colors hover:text-zinc-300"
+          className="mt-3 block text-center text-xs text-zinc-500 transition-colors hover:text-zinc-300"
         >
           ← 홈으로 돌아가기
         </Link>

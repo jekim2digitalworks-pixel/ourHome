@@ -8,6 +8,7 @@ const ALL: { key: Exclude<TabKey, "overview" | "settings">; label: string }[] = 
   { key: "calendar", label: "캘린더" },
   { key: "assets", label: "자산관리" },
   { key: "baby", label: "육아차트" },
+  { key: "todos", label: "할일·장보기" },
   { key: "photos", label: "사진첩" },
 ];
 

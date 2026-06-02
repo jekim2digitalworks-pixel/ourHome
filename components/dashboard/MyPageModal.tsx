@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, Camera, Loader2, Check, User, KeyRound } from "lucide-react";
+import { X, Camera, Loader2, Check, User, KeyRound, LogOut, Home } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 export function MyPageModal({
@@ -12,6 +12,8 @@ export function MyPageModal({
   email,
   displayName,
   avatarUrl,
+  familyId,
+  homeName,
   onSaved,
 }: {
   open: boolean;
@@ -20,6 +22,8 @@ export function MyPageModal({
   email: string;
   displayName: string;
   avatarUrl: string | null;
+  familyId?: string | null;
+  homeName?: string;
   onSaved: () => void;
 }) {
   const [name, setName] = useState(displayName);
@@ -28,17 +32,23 @@ export function MyPageModal({
   const [savingName, setSavingName] = useState(false);
   const [nameSaved, setNameSaved] = useState(false);
 
+  const [home, setHome] = useState(homeName ?? "");
+  const [savingHome, setSavingHome] = useState(false);
+  const [homeSaved, setHomeSaved] = useState(false);
+
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pwSaving, setPwSaving] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setName(displayName);
     setAvatar(avatarUrl);
-  }, [displayName, avatarUrl, open]);
+    setHome(homeName ?? "");
+  }, [displayName, avatarUrl, homeName, open]);
 
   if (!open || typeof document === "undefined") return null;
 
@@ -66,6 +76,17 @@ export function MyPageModal({
     onSaved();
   }
 
+  async function saveHome() {
+    if (!familyId || !home.trim()) return;
+    setSavingHome(true);
+    const supabase = createClient();
+    await supabase.from("families").update({ name: home.trim() }).eq("id", familyId);
+    setSavingHome(false);
+    setHomeSaved(true);
+    setTimeout(() => setHomeSaved(false), 1500);
+    onSaved();
+  }
+
   async function changePassword() {
     setPwMsg(null);
     if (pw.length < 6) {
@@ -87,6 +108,14 @@ export function MyPageModal({
       setPw("");
       setPw2("");
     }
+  }
+
+  async function logout() {
+    setLoggingOut(true);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    // 전체 새로고침으로 세션·클라이언트 상태를 깨끗이 비우고 로그인으로 이동.
+    window.location.href = "/login";
   }
 
   const initial = (name || email || "?").trim().charAt(0).toUpperCase();
@@ -164,6 +193,32 @@ export function MyPageModal({
           </button>
         </div>
 
+        {/* 집 이름 (가족이 있을 때만) */}
+        {familyId && (
+          <>
+            <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-zinc-400">
+              <Home className="h-3.5 w-3.5" /> 집 이름 (사이드바에 표시됩니다)
+            </label>
+            <div className="mb-5 flex items-center gap-2">
+              <input
+                value={home}
+                onChange={(e) => setHome(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && saveHome()}
+                placeholder="예: 우리집, OO네"
+                className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-accent/40 focus:outline-none"
+              />
+              <button
+                onClick={saveHome}
+                disabled={savingHome || !home.trim()}
+                className="flex shrink-0 items-center gap-1 rounded-xl bg-accent/90 px-3 py-2.5 text-sm font-medium text-ink-900 transition-all duration-300 ease-out-back hover:scale-102 hover:bg-accent disabled:opacity-40"
+              >
+                {savingHome ? <Loader2 className="h-4 w-4 animate-spin" /> : homeSaved ? <Check className="h-4 w-4" /> : null}
+                {homeSaved ? "저장됨" : "저장"}
+              </button>
+            </div>
+          </>
+        )}
+
         {/* 비밀번호 변경 */}
         <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-zinc-400">
           <KeyRound className="h-3.5 w-3.5" /> 비밀번호 변경
@@ -208,6 +263,18 @@ export function MyPageModal({
           <p className="text-[11px] text-zinc-600">
             Google 로그인 계정도 비밀번호를 설정하면 이메일+비밀번호로도 로그인할 수 있어요.
           </p>
+        </div>
+
+        {/* 로그아웃 */}
+        <div className="mt-6 border-t border-white/10 pt-4">
+          <button
+            onClick={logout}
+            disabled={loggingOut}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2.5 text-sm font-medium text-rose-200 transition-all duration-300 ease-out-back hover:scale-102 hover:bg-rose-400/15 disabled:opacity-50"
+          >
+            {loggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
+            로그아웃
+          </button>
         </div>
       </div>
     </div>,

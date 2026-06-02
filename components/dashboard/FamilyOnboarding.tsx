@@ -76,7 +76,7 @@ export function FamilyOnboarding({ onDone }: { onDone: () => void }) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
-          placeholder="가족 이름 (예: 우리집, OO네)"
+          placeholder="집 이름 (예: 우리집, OO네) · 사이드바에 표시됩니다"
           className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-accent/40 focus:outline-none"
         />
       ) : (

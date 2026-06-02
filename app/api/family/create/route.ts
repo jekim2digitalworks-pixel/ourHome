@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 
   const { data: fam, error } = await admin
     .from("families")
-    .insert({ name: name?.trim() || "우리집", created_by: user.id })
+    .insert({ name: name?.trim() || "our home", created_by: user.id })
     .select()
     .single();
   if (error || !fam) {

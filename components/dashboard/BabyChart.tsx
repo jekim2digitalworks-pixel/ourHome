@@ -175,12 +175,16 @@ export function BabyChart({
     if (data) setRecords((prev) => (prev.some((r) => r.id === data.id) ? prev : [data as BabyRecord, ...prev]));
     setMl("");
     setNote("");
-    setStartTime("");
+    setStartTime(cat === "sleep" ? nowHM() : "");
     setBusy(false);
   }
 
   async function setWake(rec: BabyRecord, timeStr?: string) {
-    const ended = atTime(timeStr);
+    // 자정을 넘긴 수면: 기상 시각이 취침 시각보다 이르면 다음 날로 보정.
+    let endDate = new Date(atTime(timeStr));
+    const startMs = new Date(rec.detail?.started_at ?? rec.recorded_at).getTime();
+    if (endDate.getTime() < startMs) endDate = new Date(endDate.getTime() + 86400000);
+    const ended = endDate.toISOString();
     const supabase = createClient();
     const newDetail = { ...(rec.detail ?? {}), ended_at: ended };
     await supabase.from("baby_records").update({ detail: newDetail as unknown as Json }).eq("id", rec.id);
@@ -322,7 +326,7 @@ export function BabyChart({
                 setCat(c.key);
                 setMl("");
                 setNote("");
-                setStartTime("");
+                setStartTime(c.key === "sleep" ? nowHM() : "");
               }}
               className={[
                 "flex flex-col items-center gap-1 rounded-xl border px-2 py-2.5 transition-all duration-300 ease-out-back hover:scale-105",
@@ -361,7 +365,7 @@ export function BabyChart({
                 onChange={(e) => setStartTime(e.target.value)}
                 className="rounded-xl border border-white/10 bg-white/[0.04] px-2.5 py-2 text-sm text-zinc-100 focus:border-accent/40 focus:outline-none [color-scheme:dark]"
               />
-              <span className="text-[11px] text-zinc-600">(비우면 지금)</span>
+              <span className="text-[11px] text-zinc-600">(현재 시각 · 수정 가능)</span>
             </div>
           )}
           {cat !== "feeding" && cat !== "sleep" && (
@@ -478,8 +482,8 @@ export function BabyChart({
                           </button>
                         </>
                       ) : sleeping ? (
-                        <button onClick={() => setWake(r)} className="rounded-lg border border-indigo-300/30 bg-indigo-300/10 px-2.5 py-1 text-xs text-indigo-200 hover:bg-indigo-300/20">
-                          지금 깨어남
+                        <button onClick={() => setWakeEdit({ id: r.id, time: nowHM() })} className="rounded-lg border border-indigo-300/30 bg-indigo-300/10 px-2.5 py-1 text-xs text-indigo-200 hover:bg-indigo-300/20">
+                          깨어남 기록
                         </button>
                       ) : (
                         <button
