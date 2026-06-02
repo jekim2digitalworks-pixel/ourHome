@@ -34,6 +34,8 @@ function Shell({ children }: { children: React.ReactNode }) {
           subtitle={meta.subtitle}
           displayName={profile?.displayName}
           avatarUrl={profile?.avatarUrl}
+          members={members}
+          currentUserId={profile?.userId}
           onOpenMyPage={() => setMyPageOpen(true)}
           headerSlot={
             active === "overview" && familyId && profile ? (

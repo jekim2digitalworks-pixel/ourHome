@@ -7,16 +7,11 @@ import { GlassCard, CardHeader } from "@/components/ui/GlassCard";
 import { useDashboard } from "@/components/dashboard/DashboardShell";
 
 export default function SettingsPage() {
-  const { familyId, members, enabled, primary, toggle, choosePrimary } = useDashboard();
+  const { familyId, members, enabled, toggle, reorder } = useDashboard();
   return (
-    <div className="animate-fade-up space-y-5">
+    <div className="animate-fade-up mx-auto max-w-2xl space-y-5">
       {familyId && <InviteCodeCard code={familyId} memberCount={Object.keys(members).length} />}
-      <SettingsPanel
-        enabled={enabled}
-        primary={primary}
-        onToggle={toggle}
-        onSetPrimary={choosePrimary}
-      />
+      <SettingsPanel enabled={enabled} onToggle={toggle} onReorder={reorder} />
     </div>
   );
 }
@@ -25,7 +20,7 @@ export default function SettingsPage() {
 function InviteCodeCard({ code, memberCount }: { code: string; memberCount: number }) {
   const [copied, setCopied] = useState(false);
   return (
-    <GlassCard className="max-w-xl">
+    <GlassCard>
       <CardHeader
         icon={<Users className="h-4.5 w-4.5" />}
         title="가족 초대"

@@ -27,12 +27,13 @@ interface DashboardState {
   members: Members;
   profileLoading: boolean;
   familyId: string | null;
+  /** 활성 모듈 — 배열 순서가 곧 대시보드 노출 순위. */
   enabled: TabKey[];
-  primary: TabKey;
-  /** primary 우선 정렬된, 개요 화면에 노출할 카드 순서 */
+  /** 개요 화면에 노출할 카드 순서(= enabled 그대로). */
   orderedCards: TabKey[];
   toggle: (key: TabKey) => void;
-  choosePrimary: (key: TabKey) => void;
+  /** 드래그앤드롭으로 정한 새 순서를 반영·저장. */
+  reorder: (next: TabKey[]) => void;
   reload: () => Promise<void>;
   myPageOpen: boolean;
   setMyPageOpen: (open: boolean) => void;
@@ -49,7 +50,6 @@ export function useDashboard() {
 
 export function DashboardProvider({ children }: { children: React.ReactNode }) {
   const [enabled, setEnabled] = useState<TabKey[]>(["calendar", "assets", "baby", "todos", "photos"]);
-  const [primary, setPrimary] = useState<TabKey>("baby");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [homeName, setHomeName] = useState("our home");
   const [members, setMembers] = useState<Members>({});
@@ -94,7 +94,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     // 저장된 대시보드 개인화(활성 탭·메인) 복원
     const { data: st } = await supabase
       .from("settings")
-      .select("enabled_tabs, primary_tab")
+      .select("enabled_tabs")
       .eq("user_id", user.id)
       .single();
     if (st) {
@@ -102,8 +102,8 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
       const en = ((st.enabled_tabs as TabKey[]) ?? []).filter((k) => valid.includes(k));
       // 'todos'는 이후 추가된 모듈 — 옛 설정엔 없으므로 자동 노출(사용자가 끈 게 아님).
       if (en.length && !en.includes("todos")) en.push("todos");
+      // enabled_tabs 의 저장 순서가 곧 노출 순위.
       if (en.length) setEnabled(en);
-      if (st.primary_tab && valid.includes(st.primary_tab as TabKey)) setPrimary(st.primary_tab as TabKey);
     }
 
     setProfileLoading(false);
@@ -113,42 +113,36 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     reload();
   }, [reload]);
 
-  // 개인화 변경을 public.settings 에 즉시 저장(없으면 생성).
-  const persistSettings = useCallback(async (next: { enabled?: TabKey[]; primary?: TabKey }) => {
+  // 개인화(활성 모듈·순서)를 public.settings.enabled_tabs 에 즉시 저장.
+  const persistEnabled = useCallback(async (next: TabKey[]) => {
     const supabase = createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase.from("settings").upsert({
-      user_id: user.id,
-      ...(next.enabled ? { enabled_tabs: next.enabled } : {}),
-      ...(next.primary ? { primary_tab: next.primary } : {}),
-    });
+    await supabase.from("settings").upsert({ user_id: user.id, enabled_tabs: next });
   }, []);
 
   const toggle = useCallback(
     (key: TabKey) =>
       setEnabled((prev) => {
+        // 켜면 맨 뒤에 추가(순위 최하단), 끄면 제거.
         const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
-        persistSettings({ enabled: next });
+        persistEnabled(next);
         return next;
       }),
-    [persistSettings]
+    [persistEnabled]
   );
 
-  const choosePrimary = useCallback(
-    (key: TabKey) => {
-      setPrimary(key);
-      persistSettings({ primary: key });
+  const reorder = useCallback(
+    (next: TabKey[]) => {
+      setEnabled(next);
+      persistEnabled(next);
     },
-    [persistSettings]
+    [persistEnabled]
   );
 
-  const orderedCards = useMemo<TabKey[]>(() => {
-    const rest = enabled.filter((k) => k !== primary);
-    return [primary, ...rest].filter((k) => enabled.includes(k));
-  }, [enabled, primary]);
+  const orderedCards = useMemo<TabKey[]>(() => [...enabled], [enabled]);
 
   const value = useMemo<DashboardState>(
     () => ({
@@ -158,15 +152,14 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
       profileLoading,
       familyId: profile?.familyId ?? null,
       enabled,
-      primary,
       orderedCards,
       toggle,
-      choosePrimary,
+      reorder,
       reload,
       myPageOpen,
       setMyPageOpen,
     }),
-    [profile, homeName, members, profileLoading, enabled, primary, orderedCards, toggle, choosePrimary, reload, myPageOpen]
+    [profile, homeName, members, profileLoading, enabled, orderedCards, toggle, reorder, reload, myPageOpen]
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
