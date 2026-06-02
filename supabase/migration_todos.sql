@@ -3,7 +3,6 @@
 -- 부부가 함께 보는 할 일·장보기 체크리스트. 한 사람이 체크하면 실시간 반영.
 -- Supabase SQL Editor에 붙여넣고 Run 하세요. (1회)
 -- ============================================================================
-
 create table if not exists public.todos (
   id         uuid primary key default gen_random_uuid(),
   family_id  uuid not null references public.families (id) on delete cascade,
