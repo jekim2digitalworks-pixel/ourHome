@@ -10,7 +10,7 @@ const ALL: { key: ModuleKey; label: string }[] = [
   { key: "calendar", label: "캘린더" },
   { key: "assets", label: "자산관리" },
   { key: "baby", label: "육아차트" },
-  { key: "todos", label: "할일·장보기" },
+  { key: "todos", label: "가사 일 같이하기" },
   { key: "photos", label: "사진첩" },
 ];
 const labelOf = (k: TabKey) => ALL.find((m) => m.key === k)?.label ?? k;

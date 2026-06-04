@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Heart, Mail, Lock, User, ArrowRight, Loader2, MailCheck } from "lucide-react";
+import { Home, Mail, Lock, User, ArrowRight, Loader2, MailCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { GlassCard } from "@/components/ui/GlassCard";
 
@@ -14,6 +14,17 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [done, setDone] = useState<"none" | "confirm" | "signed-in">("none");
+  // 로고 클릭 목적지: 로그인 상태면 대시보드, 아니면 랜딩.
+  const [homeHref, setHomeHref] = useState("/");
+
+  // 현재 세션을 확인해 로고 링크 목적지를 정합니다.
+  useEffect(() => {
+    createClient()
+      .auth.getUser()
+      .then(({ data }) => {
+        if (data.user) setHomeHref("/dashboard");
+      });
+  }, []);
 
   // Google 회원가입(= 로그인): 캘린더/드라이브 권한까지 한 번에 받습니다.
   async function signUpWithGoogle() {
@@ -83,9 +94,13 @@ export default function SignupPage() {
     <div className="flex min-h-screen items-center justify-center px-5">
       <GlassCard className="w-full max-w-sm p-7">
         <div className="mb-6 flex flex-col items-center text-center">
-          <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent ring-1 ring-accent/30">
-            <Heart className="h-5 w-5" fill="currentColor" strokeWidth={0} />
-          </span>
+          <Link
+            href={homeHref}
+            aria-label="홈으로"
+            className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent ring-1 ring-accent/30 transition-transform duration-300 ease-out-back hover:scale-105"
+          >
+            <Home className="h-5 w-5" />
+          </Link>
           <h1 className="text-lg font-semibold tracking-tight text-zinc-100">Our_Home 회원가입</h1>
           <p className="prose-ko mt-1 text-sm text-zinc-400">두 사람의 홈을 시작해 보세요.</p>
         </div>

@@ -1,15 +1,31 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ListChecks, ShoppingCart, Check } from "lucide-react";
+import { ListChecks, Check, CalendarDays } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { GlassCard, CardHeader } from "@/components/ui/GlassCard";
 
 interface Todo {
   id: string;
-  kind: "todo" | "shopping";
+  category: string;
+  due_date: string | null;
   title: string;
   done: boolean;
+}
+
+const EMOJI: Record<string, string> = {
+  장보기: "🛒",
+  육아: "🍼",
+  행사: "🎉",
+  이벤트: "🎈",
+  집안일: "🧹",
+  기타: "📌",
+};
+const emojiFor = (cat: string) => EMOJI[cat] ?? "✏️";
+
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export function TodoSummaryCard({ familyId }: { familyId?: string }) {
@@ -24,7 +40,7 @@ export function TodoSummaryCard({ familyId }: { familyId?: string }) {
     const supabase = createClient();
     const { data } = await supabase
       .from("todos")
-      .select("id, kind, title, done")
+      .select("id, category, due_date, title, done")
       .eq("family_id", familyId)
       .eq("done", false)
       .order("created_at", { ascending: false })
@@ -53,13 +69,14 @@ export function TodoSummaryCard({ familyId }: { familyId?: string }) {
     };
   }, [familyId, load]);
 
-  const todoCount = items.filter((t) => t.kind === "todo").length;
-  const shopCount = items.filter((t) => t.kind === "shopping").length;
+  const today = todayKey();
+  const remaining = items.length;
+  const todayCount = items.filter((t) => t.due_date === today).length;
   const preview = items.slice(0, 4);
 
   return (
     <GlassCard className="flex h-full flex-col">
-      <CardHeader icon={<ListChecks className="h-4.5 w-4.5" />} title="할 일 · 장보기" hint="함께 보는 체크리스트" />
+      <CardHeader icon={<ListChecks className="h-4.5 w-4.5" />} title="가사 일 같이하기" hint="함께 나누는 우리 집 할 일" />
 
       {!familyId ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center text-zinc-500">
@@ -71,15 +88,15 @@ export function TodoSummaryCard({ familyId }: { familyId?: string }) {
           <div className="grid grid-cols-2 gap-2 text-center">
             <div className="rounded-xl border border-white/5 bg-white/[0.03] px-2 py-2.5">
               <div className="mb-1 flex items-center justify-center gap-1 text-[11px] text-zinc-500">
-                <ListChecks className="h-3 w-3 text-accent" /> 할 일
+                <ListChecks className="h-3 w-3 text-accent" /> 남은 일
               </div>
-              <p className="text-sm font-semibold tracking-tight text-zinc-100">{todoCount}건 남음</p>
+              <p className="text-sm font-semibold tracking-tight text-zinc-100">{remaining}건</p>
             </div>
             <div className="rounded-xl border border-white/5 bg-white/[0.03] px-2 py-2.5">
               <div className="mb-1 flex items-center justify-center gap-1 text-[11px] text-zinc-500">
-                <ShoppingCart className="h-3 w-3 text-accent-cool" /> 장보기
+                <CalendarDays className="h-3 w-3 text-accent-cool" /> 오늘 마감
               </div>
-              <p className="text-sm font-semibold tracking-tight text-zinc-100">{shopCount}건 남음</p>
+              <p className="text-sm font-semibold tracking-tight text-zinc-100">{todayCount}건</p>
             </div>
           </div>
 
@@ -98,11 +115,7 @@ export function TodoSummaryCard({ familyId }: { familyId?: string }) {
                     key={t.id}
                     className="flex items-center gap-2 rounded-lg border border-white/5 bg-white/[0.03] px-3 py-1.5 text-sm"
                   >
-                    {t.kind === "shopping" ? (
-                      <ShoppingCart className="h-3.5 w-3.5 shrink-0 text-accent-cool" />
-                    ) : (
-                      <ListChecks className="h-3.5 w-3.5 shrink-0 text-accent" />
-                    )}
+                    <span className="shrink-0 text-sm">{emojiFor(t.category)}</span>
                     <span className="truncate text-zinc-300">{t.title}</span>
                   </li>
                 ))}

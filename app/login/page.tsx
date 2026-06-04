@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Heart, Mail, ArrowRight, Lock } from "lucide-react";
+import { Home, Mail, ArrowRight, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { GlassCard } from "@/components/ui/GlassCard";
 
@@ -18,12 +18,23 @@ export default function LoginPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [resetView, setResetView] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  // 로고 클릭 목적지: 로그인 상태면 대시보드, 아니면 랜딩.
+  const [homeHref, setHomeHref] = useState("/");
 
   // 콜백에서 code 교환 실패 시 ?error=auth 로 돌아옵니다.
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("error") === "auth") {
       setAuthError(true);
     }
+  }, []);
+
+  // 현재 세션을 확인해 로고 링크 목적지를 정합니다.
+  useEffect(() => {
+    createClient()
+      .auth.getUser()
+      .then(({ data }) => {
+        if (data.user) setHomeHref("/dashboard");
+      });
   }, []);
 
   // 통합 로그인: Google 로그인 + 캘린더/드라이브 권한을 한 번에 받습니다.
@@ -116,9 +127,13 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center px-5">
       <GlassCard className="w-full max-w-sm p-7">
         <div className="mb-6 flex flex-col items-center text-center">
-          <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent ring-1 ring-accent/30">
-            <Heart className="h-5 w-5" fill="currentColor" strokeWidth={0} />
-          </span>
+          <Link
+            href={homeHref}
+            aria-label="홈으로"
+            className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent ring-1 ring-accent/30 transition-transform duration-300 ease-out-back hover:scale-105"
+          >
+            <Home className="h-5 w-5" />
+          </Link>
           <h1 className="text-lg font-semibold tracking-tight text-zinc-100">Our_Home 로그인</h1>
           <p className="prose-ko mt-1 text-sm text-zinc-400">두 사람의 홈에 오신 것을 환영해요.</p>
         </div>

@@ -60,6 +60,7 @@ npm install
 #      supabase/migration_photos.sql           (사진 카테고리)
 #      supabase/migration_drive_folders.sql    (Drive 폴더)
 #      supabase/migration_todos.sql            (공유 할일·장보기)
+#      supabase/migration_todos_category.sql   (가사 일 카테고리·날짜)
 #      supabase/migration_budgets.sql          (카테고리별 월 예산)
 # 2) Google Cloud에서 Calendar/Drive API 활성화 + OAuth 동의 화면 + 자격증명
 # 3) .env.local 작성

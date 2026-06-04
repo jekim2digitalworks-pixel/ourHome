@@ -12,7 +12,7 @@ const TITLES: Record<TabKey, { title: string; subtitle: string }> = {
   calendar: { title: "캘린더", subtitle: "자체 일정 + Google Calendar" },
   assets: { title: "자산 관리", subtitle: "스마트 가계부" },
   baby: { title: "육아 차트", subtitle: "실시간 타임라인" },
-  todos: { title: "할일 · 장보기", subtitle: "함께 보는 공유 체크리스트" },
+  todos: { title: "가사 일 같이하기", subtitle: "함께 나누는 우리 집 할 일" },
   photos: { title: "사진첩", subtitle: "Google Drive 연동" },
   settings: { title: "설정", subtitle: "대시보드 개인화" },
 };

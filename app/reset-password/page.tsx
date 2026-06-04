@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Heart, Lock, Loader2, Check } from "lucide-react";
+import { Home, Lock, Loader2, Check } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { GlassCard } from "@/components/ui/GlassCard";
 
@@ -18,12 +18,15 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // 로고 클릭 목적지: 로그인(복구) 세션이 있으면 대시보드, 아니면 랜딩.
+  const [homeHref, setHomeHref] = useState("/");
 
   // 복구 세션이 실제로 존재하는지 확인(링크 만료/직접 접근 대비).
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => {
       setReady(data.user ? "ok" : "no-session");
+      if (data.user) setHomeHref("/dashboard");
     });
   }, []);
 
@@ -57,9 +60,13 @@ export default function ResetPasswordPage() {
     <div className="flex min-h-screen items-center justify-center px-5">
       <GlassCard className="w-full max-w-sm p-7">
         <div className="mb-6 flex flex-col items-center text-center">
-          <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent ring-1 ring-accent/30">
-            <Heart className="h-5 w-5" fill="currentColor" strokeWidth={0} />
-          </span>
+          <Link
+            href={homeHref}
+            aria-label="홈으로"
+            className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent ring-1 ring-accent/30 transition-transform duration-300 ease-out-back hover:scale-105"
+          >
+            <Home className="h-5 w-5" />
+          </Link>
           <h1 className="text-lg font-semibold tracking-tight text-zinc-100">새 비밀번호 설정</h1>
           <p className="prose-ko mt-1 text-sm text-zinc-400">새로 사용할 비밀번호를 입력해 주세요.</p>
         </div>

@@ -194,6 +194,8 @@ export interface Database {
           family_id: string;
           author_id: string;
           kind: "todo" | "shopping";
+          category: string;
+          due_date: string | null;
           title: string;
           done: boolean;
           done_by: string | null;
@@ -204,10 +206,12 @@ export interface Database {
           family_id: string;
           author_id: string;
           kind?: "todo" | "shopping";
+          category?: string;
+          due_date?: string | null;
           title: string;
           done?: boolean;
         };
-        Update: Partial<{ title: string; done: boolean; done_by: string | null; done_at: string | null }>;
+        Update: Partial<{ title: string; category: string; due_date: string | null; done: boolean; done_by: string | null; done_at: string | null }>;
         Relationships: [];
       };
       google_tokens: {

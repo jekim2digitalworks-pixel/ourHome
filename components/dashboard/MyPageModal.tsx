@@ -261,23 +261,21 @@ export function MyPageModal({
             placeholder="새 비밀번호 (6자 이상)"
             className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-accent/40 focus:outline-none"
           />
-          <div className="flex items-center gap-2">
-            <input
-              type="password"
-              value={pw2}
-              onChange={(e) => setPw2(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && changePassword()}
-              placeholder="새 비밀번호 확인"
-              className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-accent/40 focus:outline-none"
-            />
-            <button
-              onClick={changePassword}
-              disabled={pwSaving || !pw || !pw2}
-              className="flex shrink-0 items-center gap-1 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm font-medium text-zinc-100 transition-all duration-300 ease-out-back hover:scale-102 hover:bg-white/[0.1] disabled:opacity-40"
-            >
-              {pwSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "변경"}
-            </button>
-          </div>
+          <input
+            type="password"
+            value={pw2}
+            onChange={(e) => setPw2(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && changePassword()}
+            placeholder="새 비밀번호 확인"
+            className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-accent/40 focus:outline-none"
+          />
+          <button
+            onClick={changePassword}
+            disabled={pwSaving || !pw || !pw2}
+            className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-accent/90 px-3 py-2.5 text-sm font-medium text-ink-900 transition-all duration-300 ease-out-back hover:scale-102 hover:bg-accent disabled:opacity-40"
+          >
+            {pwSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "비밀번호 변경"}
+          </button>
           {pwMsg && (
             <p
               className={[

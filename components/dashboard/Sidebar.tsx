@@ -23,7 +23,7 @@ const NAV: { key: TabKey; label: string; icon: typeof LayoutGrid }[] = [
   { key: "calendar", label: "캘린더", icon: CalendarDays },
   { key: "assets", label: "자산관리", icon: Wallet },
   { key: "baby", label: "육아차트", icon: Baby },
-  { key: "todos", label: "할일·장보기", icon: ListChecks },
+  { key: "todos", label: "가사 일 같이하기", icon: ListChecks },
   { key: "photos", label: "사진첩", icon: Images },
   { key: "settings", label: "설정", icon: Settings },
 ];
