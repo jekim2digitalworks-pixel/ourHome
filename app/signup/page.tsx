@@ -101,7 +101,7 @@ export default function SignupPage() {
           >
             <Home className="h-5 w-5" />
           </Link>
-          <h1 className="text-lg font-semibold tracking-tight text-zinc-100">Our_Home 회원가입</h1>
+          <h1 className="text-lg font-semibold tracking-tight text-zinc-100">홈노트 회원가입</h1>
           <p className="prose-ko mt-1 text-sm text-zinc-400">두 사람의 홈을 시작해 보세요.</p>
         </div>
 

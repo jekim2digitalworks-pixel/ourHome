@@ -1,6 +1,5 @@
 import Link from "next/link";
 import {
-  Home,
   ArrowRight,
   Wallet,
   Baby,
@@ -11,7 +10,6 @@ import {
   Heart,
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { createClient } from "@/lib/supabase/server";
 
 /* ──────────────────────────────────────────────────────────────────────────
  * 로그인 전 랜딩.
@@ -38,7 +36,7 @@ function MockWindow({ children }: { children: React.ReactNode }) {
         <span className="h-2.5 w-2.5 rounded-full bg-rose-400/50" />
         <span className="h-2.5 w-2.5 rounded-full bg-amber-300/50" />
         <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/50" />
-        <span className="ml-2 text-[11px] text-zinc-500">Our_Home</span>
+        <span className="ml-2 text-[11px] text-zinc-500">홈노트</span>
       </div>
       <div className="p-4">{children}</div>
     </GlassCard>
@@ -262,34 +260,11 @@ const TRUST = [
   },
 ];
 
-export default async function Landing() {
-  // 로그인 상태면 로고 클릭 시 대시보드로, 아니면 랜딩(현재 페이지)으로 이동.
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const homeHref = user ? "/dashboard" : "/";
-
+export default function Landing() {
   return (
     <div className="relative mx-auto max-w-6xl px-5 pb-24">
-      {/* ── Floating glass nav ── */}
-      <nav className="sticky top-4 z-30 mt-4 flex items-center justify-between py-3">
-        <Link href={homeHref} className="group flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent/15 text-accent ring-1 ring-accent/30 transition-transform duration-300 ease-out-back group-hover:scale-105">
-            <Home className="h-4 w-4" />
-          </span>
-          <span className="text-sm font-semibold tracking-tight text-zinc-100">Our_Home</span>
-        </Link>
-        <Link
-          href="/signup"
-          className="rounded-xl bg-accent/90 px-4 py-2 text-sm font-medium text-ink-900 transition-all duration-300 ease-out-back hover:scale-102 hover:bg-accent"
-        >
-          시작하기
-        </Link>
-      </nav>
-
       {/* ── Hero ── */}
-      <section className="mx-auto mt-24 max-w-3xl text-center">
+      <section className="mx-auto mt-16 max-w-3xl text-center">
         <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-zinc-400 backdrop-blur-md">
           <span className="h-1.5 w-1.5 rounded-full bg-accent" />
           부부가 함께 쓰는 우리 집 다이어리

@@ -1,4 +1,4 @@
-# Our_Home — 부부 공동 관리 플랫폼
+# 홈노트 (HomeNote) — 부부 공동 관리 플랫폼
 
 캘린더 · 스마트 가계부 · 실시간 육아 차트 · 사진첩을 한 곳에서. Next.js (App Router) +
 Supabase + Google APIs로 구축한 프리미엄 글래스모피즘 대시보드.

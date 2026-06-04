@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   }
   const drive = google.drive({ version: "v3", auth });
 
-  // Drive 폴더 미러링: 모든 사진을 "Our_Home" 폴더 아래로, 카테고리가 있으면
+  // Drive 폴더 미러링: 모든 사진을 "홈노트" 폴더 아래로, 카테고리가 있으면
   // 같은 이름의 하위 폴더로(없으면 생성, 있으면 재사용). 폴더 작업이 실패해도
   // 업로드 자체는 막지 않도록 best-effort 처리.
   let parents: string[] | undefined = process.env.GOOGLE_DRIVE_FOLDER_ID

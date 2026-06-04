@@ -134,7 +134,7 @@ export default function LoginPage() {
           >
             <Home className="h-5 w-5" />
           </Link>
-          <h1 className="text-lg font-semibold tracking-tight text-zinc-100">Our_Home 로그인</h1>
+          <h1 className="text-lg font-semibold tracking-tight text-zinc-100">홈노트 로그인</h1>
           <p className="prose-ko mt-1 text-sm text-zinc-400">두 사람의 홈에 오신 것을 환영해요.</p>
         </div>
 

@@ -2,7 +2,7 @@ import type { drive_v3 } from "googleapis";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const FOLDER_MIME = "application/vnd.google-apps.folder";
-const ROOT_NAME = "Our_Home";
+const ROOT_NAME = "홈노트";
 
 /** Drive 검색 쿼리용 작은따옴표/역슬래시 이스케이프. */
 function esc(s: string) {
@@ -10,7 +10,7 @@ function esc(s: string) {
 }
 
 /**
- * 연동 계정의 "Our_Home" 최상위 폴더 id를 보장.
+ * 연동 계정의 "홈노트" 최상위 폴더 id를 보장.
  * google_tokens.drive_root_folder_id에 캐시 → 이후엔 Drive 호출 없이 재사용.
  */
 export async function ensureRootFolder(drive: drive_v3.Drive, userId: string): Promise<string> {

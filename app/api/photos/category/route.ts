@@ -37,7 +37,7 @@ export async function PATCH(req: NextRequest) {
   const oldName = cat.name;
   await admin.from("photo_categories").update({ name: newName }).eq("id", id);
 
-  // best-effort: 본인 Drive의 Our_Home/<oldName> 폴더를 newName으로 rename
+  // best-effort: 본인 Drive의 홈노트/<oldName> 폴더를 newName으로 rename
   if (oldName !== newName) {
     try {
       const auth = await getAuthorizedClient(user.id);
